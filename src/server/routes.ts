@@ -799,6 +799,7 @@ api.post('/chat', asyncRoute(async (req: Request, res: Response) => {
 
     res.json({
       status: 'success',
+      apiVersion: DOMAIN_MODEL_VERSION,
       session_id: sessionId ?? null,
       language: result.detectedLanguage,
       result,
