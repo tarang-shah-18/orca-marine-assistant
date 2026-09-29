@@ -286,7 +286,7 @@ interface MarineHourly {
 
 const MPS_TO_KNOTS = 1.94384;
 
-function buildOcean(
+export function buildOcean(
   harborId: string,
   harborName: string,
   hourly: MarineHourly,
@@ -294,6 +294,15 @@ function buildOcean(
   fetchedAt: string,
 ): OceanData | null {
   if (!hourly?.time?.length) return null;
+
+  // Open-Meteo answers with a well-formed hourly block whose every value is
+  // `null` when its marine model has no grid cell covering the point (Digha
+  // sits just inside the Bay of Bengal model edge and does this). Averaging
+  // those nulls as `?? 0` would yield a confident-looking 0 m wave height and
+  // 0 °C SST still stamped "real-time sea state" — the one thing a fisher must
+  // never be shown. If nothing usable came back, report no live data so the
+  // caller falls back to the labelled reference snapshot instead.
+  if (!hourly.wave_height?.some((v) => typeof v === 'number')) return null;
 
   const periods: Array<OceanSlot['period']> = ['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT'];
   const periodStart: Record<OceanSlot['period'], number> = {
@@ -317,12 +326,27 @@ function buildOcean(
       }
       if (idx.length === 0) continue;
 
-      const avg = (pick: number[]): number =>
-        idx.reduce((sum, i) => sum + (pick[i] ?? 0), 0) / idx.length;
-      const max = (pick: number[]): number =>
-        idx.reduce((m, i) => Math.max(m, pick[i] ?? 0), 0);
+      // Skip hours the model left empty rather than counting them as zeros,
+      // which would under-report the sea state. A window with no usable hour
+      // at all inherits the series mean rather than inventing a calm sea.
+      const values = (pick: number[] | undefined): number[] =>
+        idx.map((i) => pick?.[i]).filter((v): v is number => typeof v === 'number');
 
-      const waveHeightMeters = roundTo(max(hourly.wave_height), 1);
+      const seriesMean = (pick: number[] | undefined): number => {
+        const all = (pick ?? []).filter((v): v is number => typeof v === 'number');
+        return all.length ? all.reduce((s, v) => s + v, 0) / all.length : 0;
+      };
+
+      const avg = (pick: number[] | undefined): number => {
+        const vals = values(pick);
+        return roundTo(vals.length ? vals.reduce((sum, v) => sum + v, 0) / vals.length : seriesMean(pick), 1);
+      };
+      const max = (pick: number[] | undefined): number => {
+        const vals = values(pick);
+        return roundTo(vals.length ? Math.max(...vals) : seriesMean(pick), 1);
+      };
+
+      const waveHeightMeters = max(hourly.wave_height);
       const sea = describeSeaState(waveHeightMeters);
 
       slots.push({
@@ -331,10 +355,10 @@ function buildOcean(
         validHours: day * 24 + periodStart[period],
         period,
         waveHeightMeters,
-        wavePeriodSeconds: roundTo(avg(hourly.wave_period), 1),
+        wavePeriodSeconds: avg(hourly.wave_period),
         swellDirection: compass16(avg(hourly.swell_wave_direction)),
         swellDirectionDeg: Math.round(avg(hourly.swell_wave_direction)),
-        seaSurfaceTempCelsius: roundTo(avg(hourly.sea_surface_temperature), 1),
+        seaSurfaceTempCelsius: avg(hourly.sea_surface_temperature),
         currentKnots: roundTo(avg(hourly.ocean_current_velocity) * MPS_TO_KNOTS, 1),
         currentDirection: compass16(avg(hourly.ocean_current_direction)),
         seaStateCode: sea.code,

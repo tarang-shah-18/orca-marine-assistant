@@ -31,6 +31,7 @@ import {
 import { DATA_CYCLE, GEOFENCES, TIDE_STATIONS } from '../src/core/dataset';
 import { getPhrasebook, SUPPORTED_PHRASEBOOK_LANGUAGES, riskWord } from '../src/core/i18n';
 import { localizeCondition, localizeSource } from '../src/core/localize';
+import { buildOcean } from '../src/core/live';
 import type { MarineAlert } from '../src/types';
 
 let passed = 0;
@@ -184,6 +185,71 @@ function approx(a: number, b: number, tolerance: number): boolean {
   check('dataset · DATA_CYCLE fully shaped', typeof DATA_CYCLE.cycle === 'string' && DATA_CYCLE.label.includes('IST') && DATA_CYCLE.pfzValidFrom.length > 0, DATA_CYCLE.label);
   check('dataset · tide stations present', Object.keys(TIDE_STATIONS).length >= 10, String(Object.keys(TIDE_STATIONS).length));
   check('dataset · geofences present', GEOFENCES.length >= 4, String(GEOFENCES.length));
+}
+
+/* ------------------------------------------------------------------ *
+ * Section 5 — live sea-state honesty
+ *
+ * Open-Meteo returns a well-formed marine block whose every value is `null`
+ * when its model has no grid cell over the point (Digha, on the Bay of Bengal
+ * model edge). Those nulls must never become a confident-looking 0 m / 0 °C
+ * still stamped "real-time sea state" — a fisher acting on that goes to sea
+ * against a sea that was never measured. No live data must be reported at all
+ * in that case, so the caller falls back to the labelled reference snapshot.
+ * ------------------------------------------------------------------ */
+
+{
+  const hours = 96;
+  const series = (value: number | null): number[] => new Array(hours).fill(value);
+
+  // Exactly the shape Digha returns: a full hourly block, every field null.
+  const allNull = {
+    time: new Array(hours).fill('2026-09-29T00:00'),
+    wave_height: series(null),
+    wave_direction: series(null),
+    wave_period: series(null),
+    wind_wave_height: series(null),
+    swell_wave_height: series(null),
+    swell_wave_direction: series(null),
+    sea_surface_temperature: series(null),
+    ocean_current_velocity: series(null),
+    ocean_current_direction: series(null),
+  };
+  const refused = buildOcean('digha', 'Digha', allNull as never, 28.5, '2026-09-29T00:00:00.000Z');
+  check('live · all-null marine payload refuses to build', refused === null, String(refused));
+
+  // A healthy payload still builds, and stays physically plausible.
+  const good = {
+    time: new Array(hours).fill('2026-09-29T00:00'),
+    wave_height: series(1.6),
+    wave_direction: series(165),
+    wave_period: series(9.4),
+    wind_wave_height: series(0.3),
+    swell_wave_height: series(1.2),
+    swell_wave_direction: series(165),
+    sea_surface_temperature: series(28.4),
+    ocean_current_velocity: series(0.6),
+    ocean_current_direction: series(90),
+  };
+  const built = buildOcean('kochi', 'Kochi', good as never, 27.5, '2026-09-29T00:00:00.000Z');
+  check(
+    'live · healthy marine payload builds plausible sea state',
+    built !== null && built.waveHeightMeters > 0 && built.seaSurfaceTempCelsius > 20 && built.forecast.length > 0,
+    built ? `${built.waveHeightMeters} m / ${built.seaSurfaceTempCelsius}°C` : 'null',
+  );
+
+  // A window whose hours are all null must inherit real values from the rest
+  // of the series, not collapse to a flat calm.
+  const holed = {
+    ...good,
+    sea_surface_temperature: new Array(hours).fill(null).map((_, i) => (i < 12 ? null : 28.4)),
+  };
+  const withHole = buildOcean('digha', 'Digha', holed as never, 28.5, '2026-09-29T00:00:00.000Z');
+  check(
+    'live · null hours never average down to a fabricated value',
+    withHole !== null && withHole.seaSurfaceTempCelsius > 20,
+    withHole ? `${withHole.seaSurfaceTempCelsius}°C` : 'null',
+  );
 }
 
 /* ------------------------------------------------------------------ *

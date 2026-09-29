@@ -53,7 +53,7 @@ import {
   getTideStation,
   getWeather,
   getWeatherNear,
-} from '../core/dataset';
+} from '../core/dataAccess';
 import { liveDataCycle, liveStatusReport, refreshLive } from '../core/live';
 import { fleetOverview } from '../core/fleet';
 import { getPhrasebook } from '../core/i18n';
