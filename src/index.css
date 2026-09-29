@@ -1,0 +1,233 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ *
+ * ORCA — dark maritime ops console
+ *
+ * The whole app inherits one palette. Overriding the Tailwind `slate`
+ * ramp turns every existing component into the deep-navy operations
+ * theme without touching a single class in them; `cyan` becomes the
+ * radar-accent. New components add the HUD layer on top.
+ * ------------------------------------------------------------------ */
+
+@theme {
+  /* Deep maritime navy ramp — replaces Tailwind's slate everywhere. */
+  --color-slate-50: #ecf3fb;
+  --color-slate-100: #d9e6f4;
+  --color-slate-200: #b9cfe7;
+  --color-slate-300: #93b2d4;
+  --color-slate-400: #648db6;
+  --color-slate-500: #42709b;
+  --color-slate-600: #2e5680;
+  --color-slate-700: #213f63;
+  --color-slate-800: #142c49;
+  --color-slate-900: #0b1d35;
+  --color-slate-950: #050f1e;
+
+  /* Radar cyan — a sonar phosphor rather than vanilla cyan. */
+  --color-cyan-50: #effcff;
+  --color-cyan-100: #d5f6ff;
+  --color-cyan-200: #a9ecff;
+  --color-cyan-300: #6fddff;
+  --color-cyan-400: #2fc7f9;
+  --color-cyan-500: #0aa7df;
+  --color-cyan-600: #0884b8;
+  --color-cyan-700: #0a6993;
+  --color-cyan-800: #0d5678;
+  --color-cyan-900: #0e4864;
+  --color-cyan-950: #042033;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-slate-950);
+    color: var(--color-slate-100);
+    background-image:
+      radial-gradient(1100px 560px at 78% -8%, rgba(14, 116, 178, 0.22), transparent 62%),
+      radial-gradient(900px 520px at -8% 108%, rgba(10, 167, 223, 0.12), transparent 58%),
+      linear-gradient(180deg, var(--color-slate-950), #030a16 55%, var(--color-slate-950));
+    background-attachment: fixed;
+  }
+
+  /* Monospace data readouts — the "instruments" of the console. */
+  .hud-num {
+    font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Micro uppercase label used above every instrument readout. */
+  .hud-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+}
+
+@layer components {
+  /* Faint radar grid under the whole shell. */
+  .ops-grid {
+    background-image:
+      linear-gradient(rgba(42, 86, 128, 0.09) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(42, 86, 128, 0.09) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  /* Frosted glass instrument panel. */
+  .ops-panel {
+    border: 1px solid var(--color-slate-800);
+    background: linear-gradient(180deg, rgba(20, 44, 73, 0.55), rgba(5, 15, 30, 0.72));
+    border-radius: 1rem;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 18px 44px -22px rgba(0, 8, 18, 0.85), inset 0 1px 0 rgba(180, 220, 255, 0.06);
+  }
+
+  .ops-panel-hover {
+    transition: border-color 150ms ease, transform 150ms ease;
+  }
+  .ops-panel-hover:hover {
+    border-color: var(--color-cyan-700);
+    transform: translateY(-1px);
+  }
+
+  /* Subtle sonar pulse for the active advisory. */
+  @keyframes sonar-ping {
+    0% {
+      box-shadow: 0 0 0 0 rgba(47, 199, 249, 0.35);
+    }
+    70% {
+      box-shadow: 0 0 0 9px rgba(47, 199, 249, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(47, 199, 249, 0);
+    }
+  }
+  .sonar-ping {
+    animation: sonar-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  /* Slim invisible scrollbars for instrument panels. */
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(47, 199, 249, 0.25) transparent;
+  }
+  .scroll-thin::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .scroll-thin::-webkit-scrollbar-thumb {
+    background: rgba(47, 199, 249, 0.25);
+    border-radius: 999px;
+  }
+  .scroll-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Light theme — toggled by setting data-theme="light" on <html>.
+ *
+ * The app is written against the dark navy palette, so the light theme
+ * flips the shared ramps the classes already use: slate becomes light
+ * surfaces with dark ink (values turn around), and cyan plus the status
+ * accent tones darken so text readouts stay legible on pale panels.
+ * Product tokens and quoted bulletin text are unaffected.
+ * ------------------------------------------------------------------ */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* Flipped slate ramp — 950 is now the page surface, 50 the ink. */
+  --color-slate-50: #10233d;
+  --color-slate-100: #16314f;
+  --color-slate-200: #1f4064;
+  --color-slate-300: #2d5278;
+  --color-slate-400: #3d668e;
+  --color-slate-500: #5a7ea2;
+  --color-slate-600: #7d9cb9;
+  --color-slate-700: #a7bfd5;
+  --color-slate-800: #cfddea;
+  --color-slate-900: #e8eef6;
+  --color-slate-950: #f6f9fc;
+
+  /* Radar cyan — mid tones darkened for light surfaces. */
+  --color-cyan-200: #12a0d6;
+  --color-cyan-300: #0f8fc4;
+  --color-cyan-400: #0b7fb2;
+  --color-cyan-500: #0a6f9c;
+
+  /* Status accents — the 200/300/400 text steps move to dark tones. */
+  --color-emerald-200: #059669;
+  --color-emerald-300: #047857;
+  --color-emerald-400: #065f46;
+  --color-amber-200: #d97706;
+  --color-amber-300: #b45309;
+  --color-amber-400: #92400e;
+  --color-rose-200: #e11d48;
+  --color-rose-300: #be123c;
+  --color-rose-400: #9f1239;
+  --color-red-200: #dc2626;
+  --color-red-300: #b91c1c;
+  --color-red-400: #991b1b;
+  --color-sky-200: #0284c7;
+  --color-sky-300: #0369a1;
+  --color-sky-400: #075985;
+  --color-lime-200: #65a30d;
+  --color-lime-300: #4d7c0f;
+  --color-lime-400: #3f6212;
+
+  /* Orange / violet / purple text steps — chips read dark-on-pale too. */
+  --color-orange-200: #c2410c;
+  --color-orange-300: #b45309;
+  --color-orange-400: #92400e;
+  --color-violet-200: #7c3aed;
+  --color-violet-300: #6d28d9;
+  --color-violet-400: #5b21b6;
+  --color-purple-200: #9333ea;
+  --color-purple-300: #7e22ce;
+  --color-purple-400: #6b21a8;
+
+  /* Accent background ramps — the -950 step becomes a pale wash so the
+     translucent chips (bg-amber-950/30, bg-cyan-950/40, ...) render as
+     pastel panels instead of dark smudges on the light page. */
+  --color-amber-950: #fef3c7;
+  --color-emerald-950: #d1fae5;
+  --color-red-950: #fee2e2;
+  --color-rose-950: #ffe4e6;
+  --color-orange-950: #ffedd5;
+  --color-cyan-950: #cffafe;
+  --color-sky-950: #e0f2fe;
+  --color-violet-950: #ede9fe;
+  --color-purple-950: #f3e8ff;
+  --color-blue-950: #dbeafe;
+  --color-lime-950: #ecfccb;
+}
+
+:root[data-theme='light'] body {
+  background-color: var(--color-slate-950);
+  color: var(--color-slate-100);
+  background-image:
+    radial-gradient(1100px 560px at 78% -8%, rgba(12, 146, 214, 0.10), transparent 62%),
+    radial-gradient(900px 520px at -8% 108%, rgba(10, 167, 223, 0.06), transparent 58%),
+    linear-gradient(180deg, var(--color-slate-950), #eef3fa 55%, var(--color-slate-950));
+  background-attachment: fixed;
+}
+
+:root[data-theme='light'] .ops-grid {
+  background-image:
+    linear-gradient(rgba(45, 82, 120, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45, 82, 120, 0.08) 1px, transparent 1px);
+}
+
+:root[data-theme='light'] .ops-panel {
+  border-color: var(--color-slate-200);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(232, 238, 246, 0.85));
+  box-shadow: 0 18px 44px -22px rgba(20, 40, 70, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+:root[data-theme='light'] .ops-panel-hover:hover {
+  border-color: var(--color-cyan-600);
+}

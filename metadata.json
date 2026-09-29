@@ -1,0 +1,6 @@
+{
+  "name": "ORCA - Marine Ecosystem Reasoning with Collaborative Agents",
+  "description": "Conversational AI decision-support system for fishermen (SIH 2026 Problem ID 26176) with agentic orchestration, voice STT/TTS, PFZ detection, weather/ocean safety validation, and marine GIS maps.",
+  "requestFramePermissions": ["microphone", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

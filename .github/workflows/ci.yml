@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (type-check)
+        run: npm run lint
+
+      - name: Unit tests (offline, deterministic)
+        run: npm run test:unit
+
+      - name: Build client + server bundle
+        run: npm run build
+
+      - name: Start production server
+        run: |
+          NODE_ENV=production nohup node dist/server.cjs > /tmp/orca-server.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:3000/api/health >/dev/null 2>&1 && exit 0
+            sleep 1
+          done
+          tail -30 /tmp/orca-server.log
+          exit 1
+
+      - name: Regression sweep (3306 checks)
+        run: npm run test:sweep
+
+      - name: Debug server log on failure
+        if: failure()
+        run: tail -50 /tmp/orca-server.log || true

@@ -1,0 +1,33 @@
+# Render blueprint for the ORCA engine/API — the one long-lived service.
+#
+#   Deploy: Render dashboard → New → Blueprint → select this repo (render.yaml),
+#   or `render blueprint launch` from the Render CLI.
+#
+# The Vercel-served web client is built separately (see README "Hosting split").
+# This service keeps the in-memory live-data caches, the chat rate limiter and
+# the optional session file alive — exactly what serverless platforms cannot.
+services:
+  - type: web
+    name: orca-engine
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render injects its own $PORT when the Docker service starts; the app
+      # honours it. Leave PORT unset here.
+      # CORS allowlist — set this to your Vercel client origin
+      # (e.g. https://your-app.vercel.app) once the client is deployed.
+      # Unset it means `*`, which is fine for a demo but not for production.
+      - key: APP_URL
+        sync: false
+      # Optional: pin a fixed reference cycle for reproducible demo answers.
+      # - key: ORCA_DATA_CYCLE_PIN
+      #   value: 2026-09-09T03:00:00.000Z
+      # Rate limiter tuning (defaults are fine).
+      # - key: ORCA_RATE_MAX
+      #   value: "120"
+      # - key: ORCA_RATE_WINDOW_MS
+      #   value: "60000"

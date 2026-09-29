@@ -1,0 +1,40 @@
+# ORCA Marine Intelligence Platform — single-service compose
+#
+#   docker compose up -d --build
+#
+# The app needs no API keys. It serves the web client on :3000, keeps sessions
+# in a named volume, restarts on failure, and self-checks via /api/health.
+
+services:
+  orca:
+    build: .
+    image: orca:2.0.0
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      # Scoped CORS allowlist in any real deployment:
+      # APP_URL: https://orca.example.org
+      # Behind a reverse proxy, allow the rate limiter to read X-Forwarded-For:
+      # ORCA_TRUST_PROXY: '1'
+      # Reproduce a fixed reference cycle for demos/audits:
+      # ORCA_DATA_CYCLE_PIN: '2026-09-09T03:00:00.000Z'
+      # Persist conversations across container restarts:
+      ORCA_SESSIONS_FILE: /data/sessions.json
+    volumes:
+      - orca-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  orca-data:

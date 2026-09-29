@@ -1,0 +1,24 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+logs/
+.env*
+!.env.example
+
+# Runtime state (secrets/demo sessions never committed)
+*.sessions.json
+.orcax-sessions.json
+
+# Editor / tooling cache
+*.tsbuildinfo
+.idea/
+.vscode/
+
+# Expo (mobile subproject) generated state
+mobile/.expo/
+mobile/ios/
+mobile/android/
+mobile/dist/

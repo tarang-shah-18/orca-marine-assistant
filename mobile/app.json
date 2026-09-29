@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "ORCA Marine Assistant",
+    "slug": "orca-marine-app",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#020617"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#020617"
+      },
+      "package": "com.orca.marineapp",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.INTERNET"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow ORCA to use your coastal location for accurate PFZ and marine hazard calculations."
+        }
+      ]
+    ],
+    "extra": {
+      "//": "Point this at the agent engine. 10.0.2.2 is the Android emulator's alias for the host machine's localhost.",
+      "apiUrl": "http://10.0.2.2:3000"
+    }
+  }
+}
