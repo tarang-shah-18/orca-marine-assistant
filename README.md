@@ -11,6 +11,11 @@ back in that language, with the reasoning and the sources attached.
 **Smart India Hackathon 2026 · Problem ID 26176 · ISRO / Department of Space**
 Software · Space Technology
 
+[![CI](https://github.com/tarang-shah-18/orca-marine-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/tarang-shah-18/orca-marine-assistant/actions/workflows/ci.yml)
+![version](https://img.shields.io/badge/version-2.0.0-blue)
+![API%20keys](https://img.shields.io/badge/API%20keys-none-success)
+![languages](https://img.shields.io/badge/languages-11-orange)
+
 </div>
 
 ---
@@ -269,6 +274,9 @@ Tune `APP_URL` (CORS allowlist) and put TLS on a reverse proxy in front of the c
 set `ORCA_TRUST_PROXY=1` there so the rate limiter sees real client IPs.
 
 #### Hosting split — Vercel client + Render engine (recommended)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/tarang-shah-18/orca-marine-assistant)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Ftarang-shah-18%2Forca-marine-assistant&env=VITE_API_BASE&envDescription=ORCA%20engine%20API%20origin%2C%20e.g.%20https%3A%2F%2Fyour-engine.onrender.com%2Fapi&project-name=orca-marine-assistant)
 
 The engine must stay a single long-lived Node process (in-memory live-data caches,
 per-IP rate limiter, optional session file), so it does **not** fit serverless
