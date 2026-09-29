@@ -53,14 +53,18 @@ app.use((_req, res, next) => {
 });
 
 // In production, a strict-by-default CSP for the static bundle. `style-src
-// unsafe-inline` is required by Leaflet and the tailwind cold-start; tiles and
-// live data images come from https upstreams.
+// unsafe-inline` is required by Leaflet and the tailwind cold-start; the
+// Google Fonts hosts are whitelisted because `index.html` links the webfont
+// (Plus Jakarta Sans + Noto Sans Devanagari) from there; tiles and live data
+// images come from https upstreams.
 if (process.env.NODE_ENV === 'production') {
   app.use((_req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-        "img-src 'self' data: blob: https:; font-src 'self' data:; " +
+      "default-src 'self'; script-src 'self'; " +
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+        "font-src 'self' data: https://fonts.gstatic.com; " +
+        "img-src 'self' data: blob: https:; " +
         "connect-src 'self' https: wss:; worker-src 'self' blob:; frame-ancestors 'none'",
     );
     next();
