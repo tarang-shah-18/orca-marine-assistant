@@ -275,6 +275,10 @@ set `ORCA_TRUST_PROXY=1` there so the rate limiter sees real client IPs.
 
 #### Hosting split — Vercel client + Render engine (recommended)
 
+**Live now** — client (Vercel CDN): **[orca-marine-assistant-three.vercel.app](https://orca-marine-assistant-three.vercel.app)** ·
+engine (Render): **[orca-engine.onrender.com](https://orca-engine.onrender.com/api/health)** · engine serves the
+same client on its own origin too, so the app is usable from either host alone.
+
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/tarang-shah-18/orca-marine-assistant)
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Ftarang-shah-18%2Forca-marine-assistant&env=VITE_API_BASE&envDescription=ORCA%20engine%20API%20origin%2C%20e.g.%20https%3A%2F%2Fyour-engine.onrender.com%2Fapi&project-name=orca-marine-assistant)
 
