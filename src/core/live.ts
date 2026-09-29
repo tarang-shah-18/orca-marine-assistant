@@ -59,7 +59,9 @@ import { haversineKm, initialBearingDeg, compassPoint, roundTo, knotsToKmph } fr
  * Fetch helper (browser + Node 18+)
  * ------------------------------------------------------------------ */
 
-async function fetchJson(url: string, timeoutMs = 12000): Promise<any> {
+const FETCH_TIMEOUT_MS = 12000;
+
+async function fetchJson(url: string, timeoutMs = FETCH_TIMEOUT_MS): Promise<any> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -81,6 +83,54 @@ async function fetchText(url: string, timeoutMs = 15000): Promise<string> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Upstream failure memory
+ *
+ * A feed that stops answering must never be silent. The status report already
+ * says "reference, not live", which is honest but not actionable: an operator
+ * needs to know *why* the live layer is missing. The last failure reason per
+ * product is kept here (bounded, no payloads) and surfaced on /api/status.
+ * ------------------------------------------------------------------ */
+
+const UPSTREAM_FAILURES = new Map<string, { at: string; reason: string }>();
+const MAX_TRACKED_PRODUCTS = 12;
+
+function describeError(reason: unknown): string {
+  if (reason instanceof Error) {
+    // An aborted fetch surfaces as a bare AbortError; name the real cause.
+    if (reason.name === 'AbortError' || reason.name === 'TimeoutError') {
+      return `timed out after ${FETCH_TIMEOUT_MS} ms`;
+    }
+    return `${reason.name}: ${reason.message}`;
+  }
+  return String(reason).slice(0, 200);
+}
+
+function recordUpstreamOutcome(
+  product: string,
+  ok: boolean,
+  payload: PromiseSettledResult<unknown>,
+): void {
+  if (ok) {
+    UPSTREAM_FAILURES.delete(product);
+    return;
+  }
+  const reason =
+    payload.status === 'rejected'
+      ? describeError(payload.reason)
+      : 'upstream answered without usable data';
+  if (UPSTREAM_FAILURES.size >= MAX_TRACKED_PRODUCTS) {
+    const oldest = UPSTREAM_FAILURES.keys().next().value;
+    if (oldest !== undefined) UPSTREAM_FAILURES.delete(oldest);
+  }
+  UPSTREAM_FAILURES.set(product, { at: new Date().toISOString(), reason });
+}
+
+/** Last failure reason per product, for the ops surface. Empty when all is well. */
+export function upstreamFailures(): Record<string, { at: string; reason: string }> {
+  return Object.fromEntries(UPSTREAM_FAILURES);
 }
 
 /* ------------------------------------------------------------------ *
@@ -185,6 +235,12 @@ function buildWeather(
 ): WeatherData | null {
   if (!hourly?.time?.length) return null;
 
+  // Same rule as the marine builder: an upstream block that is present but
+  // empty (every value `null`) is not data. Averaging it as zero would invent
+  // a dead-calm, zero-visibility forecast — the most dangerous thing this
+  // product could invent for a fisher.
+  if (!hourly.wind_speed_10m?.some((v) => typeof v === 'number')) return null;
+
   const periods: Array<WeatherSlot['period']> = ['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT'];
   // Local-time hour floor at which each period starts.
   const periodStart: Record<WeatherSlot['period'], number> = {
@@ -209,16 +265,30 @@ function buildWeather(
       }
       if (idx.length === 0) continue;
 
-      const avg = (pick: number[]): number =>
-        idx.reduce((sum, i) => sum + (pick[i] ?? 0), 0) / idx.length;
-      const max = (pick: number[]): number =>
-        idx.reduce((m, i) => Math.max(m, pick[i] ?? 0), -Infinity);
+      // Skip hours the model left empty rather than counting them as zeros,
+      // which would under-report wind, rain and visibility.
+      const values = (pick: number[] | undefined): number[] =>
+        idx.map((i) => pick?.[i]).filter((v): v is number => typeof v === 'number');
+
+      const seriesMean = (pick: number[] | undefined): number => {
+        const all = (pick ?? []).filter((v): v is number => typeof v === 'number');
+        return all.length ? all.reduce((s, v) => s + v, 0) / all.length : 0;
+      };
+
+      const avg = (pick: number[] | undefined): number => {
+        const vals = values(pick);
+        return vals.length ? vals.reduce((sum, v) => sum + v, 0) / vals.length : seriesMean(pick);
+      };
+      const max = (pick: number[] | undefined): number => {
+        const vals = values(pick);
+        return vals.length ? Math.max(...vals) : seriesMean(pick);
+      };
 
       const windSpeedKnots = Math.round(avg(hourly.wind_speed_10m));
       const gustKnots = Math.round(max(hourly.wind_gusts_10m));
       const rainProbability = Math.round(max(hourly.precipitation_probability));
       const code = Math.round(max(hourly.weather_code));
-      // Visibility from the first slot hour (hourly model output).
+      // Visibility from the window's model output (hourly, metres).
       const visibilityM = hourly.visibility ? avg(hourly.visibility) : 8000;
 
       const date = localLabel.slice(0, 10);
@@ -1174,12 +1244,14 @@ export async function refreshLive(
       weather = buildWeather(harbor.id, harbor.shortName, forecastPayload.value.hourly, fetchedLabel);
       if (weather) statuses.weather = true;
     }
+    recordUpstreamOutcome('weather', weather !== null, forecastPayload);
 
     let ocean: OceanData | null = null;
     if (marinePayload.status === 'fulfilled' && marinePayload.value?.hourly) {
       ocean = buildOcean(harbor.id, harbor.shortName, marinePayload.value.hourly, sstBase, fetchedLabel);
       if (ocean) statuses.ocean = true;
     }
+    recordUpstreamOutcome('ocean', ocean !== null, marinePayload);
 
     // PFZ grounds + hotspot grid: heavier, parallel point scans.
     const [pfzResult, gridResult] = await Promise.allSettled([

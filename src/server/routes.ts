@@ -54,7 +54,7 @@ import {
   getWeather,
   getWeatherNear,
 } from '../core/dataAccess';
-import { liveDataCycle, liveStatusReport, refreshLive } from '../core/live';
+import { liveDataCycle, liveStatusReport, refreshLive, upstreamFailures } from '../core/live';
 import { fleetOverview } from '../core/fleet';
 import { getPhrasebook } from '../core/i18n';
 import {
@@ -222,6 +222,12 @@ api.get('/status', (_req: Request, res: Response) => {
     languages: SUPPORTED_LANGUAGES,
     dataCycle: liveStatusReport().live ? liveDataCycle() : DATA_CYCLE,
     live: liveStatusReport(),
+    /**
+     * Why a product is not live. The status above already refuses to call a
+     * missing feed live; this names the cause so a silent upstream outage is
+     * diagnosable in production instead of merely visible.
+     */
+    upstreamFailures: upstreamFailures(),
     sessions: sessionCount(),
   });
 });
