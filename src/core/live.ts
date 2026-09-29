@@ -61,11 +61,31 @@ import { haversineKm, initialBearingDeg, compassPoint, roundTo, knotsToKmph } fr
 
 const FETCH_TIMEOUT_MS = 12000;
 
+/** Tunable from the environment; this module also ships to the browser bundle. */
+function envMs(name: string, fallback: number): number {
+  const raw = typeof process !== 'undefined' && process.env ? process.env[name] : undefined;
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/** Open-Meteo throttles by request volume; a 429 must trigger a real back-off. */
+class UpstreamRateLimit extends Error {
+  constructor(readonly retryAfterMs: number) {
+    super(`HTTP 429 (rate limited${retryAfterMs ? `, retry after ${Math.round(retryAfterMs / 1000)}s` : ''})`);
+    this.name = 'UpstreamRateLimit';
+  }
+}
+
 async function fetchJson(url: string, timeoutMs = FETCH_TIMEOUT_MS): Promise<any> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { signal: controller.signal });
+    if (response.status === 429) {
+      const header = response.headers.get('retry-after');
+      const seconds = header ? Number(header) : NaN;
+      throw new UpstreamRateLimit(Number.isFinite(seconds) ? seconds * 1000 : 0);
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
   } finally {
@@ -97,6 +117,37 @@ async function fetchText(url: string, timeoutMs = 15000): Promise<string> {
 const UPSTREAM_FAILURES = new Map<string, { at: string; reason: string }>();
 const MAX_TRACKED_PRODUCTS = 12;
 
+/**
+ * Rate-limit back-off. Open-Meteo answers 429 by request volume, and every
+ * route refreshes on demand, so retrying on the next request only deepens the
+ * throttle. A 429 therefore parks that product for a cooling-off window (the
+ * upstream's own `Retry-After` when it sends one) instead of hammering it; the
+ * product honestly serves its labelled reference snapshot meanwhile and goes
+ * live again by itself once the window passes.
+ */
+const RATE_LIMIT_COOLDOWN_MS = envMs('ORCA_RATE_LIMIT_COOLDOWN_MS', 15 * 60 * 1000);
+/**
+ * Cadence for a feed that answered but could not be built (an upstream with no
+ * model coverage for the point, a schema change). Retried often enough to pick
+ * up a recovered feed, rarely enough not to hammer the upstream every request.
+ */
+const NO_DATA_RETRY_MS = envMs('ORCA_NO_DATA_RETRY_MS', 10 * 60 * 1000);
+// Two independent windows: a throttled feed waits out the upstream's rate-limit
+// window, while a feed that answered but could not be built merely waits for
+// its own retry cadence. They must not overwrite each other.
+const RATE_LIMITED_UNTIL = new Map<string, number>();
+const NO_DATA_UNTIL = new Map<string, number>();
+
+function coolingDown(product: string): boolean {
+  const until = Math.max(RATE_LIMITED_UNTIL.get(product) ?? 0, NO_DATA_UNTIL.get(product) ?? 0);
+  return until > Date.now();
+}
+
+function markRateLimited(product: string, retryAfterMs: number): void {
+  RATE_LIMITED_UNTIL.set(product, Date.now() + Math.max(RATE_LIMIT_COOLDOWN_MS, retryAfterMs || 0));
+  NO_DATA_UNTIL.delete(product);
+}
+
 function describeError(reason: unknown): string {
   if (reason instanceof Error) {
     // An aborted fetch surfaces as a bare AbortError; name the real cause.
@@ -111,21 +162,66 @@ function describeError(reason: unknown): string {
 function recordUpstreamOutcome(
   product: string,
   ok: boolean,
-  payload: PromiseSettledResult<unknown>,
+  reason?: string,
+  extendCooldown = true,
 ): void {
   if (ok) {
     UPSTREAM_FAILURES.delete(product);
+    RATE_LIMITED_UNTIL.delete(product);
+    NO_DATA_UNTIL.delete(product);
     return;
   }
-  const reason =
-    payload.status === 'rejected'
-      ? describeError(payload.reason)
-      : 'upstream answered without usable data';
   if (UPSTREAM_FAILURES.size >= MAX_TRACKED_PRODUCTS) {
     const oldest = UPSTREAM_FAILURES.keys().next().value;
     if (oldest !== undefined) UPSTREAM_FAILURES.delete(oldest);
   }
-  UPSTREAM_FAILURES.set(product, { at: new Date().toISOString(), reason });
+  UPSTREAM_FAILURES.set(product, { at: new Date().toISOString(), reason: reason ?? 'unknown' });
+  if (!extendCooldown) return;
+  // Extend, never shorten, within this window only: an active rate-limit
+  // window is tracked separately and must not be cut short here.
+  const until = Date.now() + NO_DATA_RETRY_MS;
+  if ((NO_DATA_UNTIL.get(product) ?? 0) < until) NO_DATA_UNTIL.set(product, until);
+}
+
+/**
+ * True when a product has failed but its back-off has lapsed, so the next
+ * request should retry it instead of serving the cached snapshot. This is what
+ * lets a rate-limited feed recover on its own while the snapshot TTL holds.
+ */
+function retryableUpstream(): boolean {
+  for (const product of UPSTREAM_FAILURES.keys()) {
+    if (!coolingDown(product)) return true;
+  }
+  return false;
+}
+
+/**
+ * One upstream call, honouring the back-off. Never throws: a failure is
+ * recorded and reported as `null` so the caller degrades to reference data.
+ */
+async function fetchUpstream(product: string, url: string): Promise<any | null> {
+  if (coolingDown(product)) {
+    const until = Math.max(RATE_LIMITED_UNTIL.get(product) ?? 0, NO_DATA_UNTIL.get(product) ?? 0);
+    const mins = Math.ceil((until - Date.now()) / 60000);
+    // Report the standing back-off without extending it, or every skipped
+    // request would push the window further out and it would never lapse.
+    recordUpstreamOutcome(product, false, `rate limited — retrying in ~${mins} min`, false);
+    return null;
+  }
+  try {
+    const payload = await fetchJson(url);
+    return payload ?? null;
+  } catch (err) {
+    if (err instanceof UpstreamRateLimit) {
+      // The rate-limit window is the back-off here; do not also arm the
+      // no-data retry cadence, which would outlive the throttle it caused.
+      markRateLimited(product, err.retryAfterMs);
+      recordUpstreamOutcome(product, false, describeError(err), false);
+      return null;
+    }
+    recordUpstreamOutcome(product, false, describeError(err));
+    return null;
+  }
 }
 
 /** Last failure reason per product, for the ops surface. Empty when all is well. */
@@ -1185,7 +1281,11 @@ export async function refreshLive(
   const target: LatLon = position ?? { latitude: harbor.latitude, longitude: harbor.longitude };
 
   const existing = peekLive(harborId);
-  if (existing && Date.now() - existing.fetchedAt < TTL_MS - 60_000) {
+  // A cached snapshot is reused as-is unless something is worth retrying: a
+  // failed product whose back-off has lapsed. Otherwise one unlucky 429 would
+  // pin the reference snapshot in place for the whole TTL.
+  const fresh = existing !== null && Date.now() - existing.fetchedAt < TTL_MS - 60_000;
+  if (fresh && !retryableUpstream()) {
     return {
       harborId,
       fetchedAt: new Date(existing.fetchedAt).toISOString(),
@@ -1219,18 +1319,18 @@ export async function refreshLive(
     const now = new Date();
 
     const query = `latitude=${target.latitude.toFixed(4)}&longitude=${target.longitude.toFixed(4)}`;
-    const [forecastPayload, marinePayload] = await Promise.allSettled([
-      fetchJson(
+    const [forecastPayload, marinePayload] = await Promise.all([
+      fetchUpstream(
+        'weather',
         `https://api.open-meteo.com/v1/forecast?${query}` +
           `&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,visibility` +
           `&timezone=auto&forecast_days=${FORECAST_DAYS}&wind_speed_unit=kn&temperature_unit=celsius&precipitation_unit=mm`,
-        12000,
       ),
-      fetchJson(
+      fetchUpstream(
+        'ocean',
         `https://marine-api.open-meteo.com/v1/marine?${query}` +
           `&hourly=wave_height,wave_direction,wave_period,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_direction,swell_wave_period,sea_surface_temperature,ocean_current_velocity,ocean_current_direction` +
           `&timezone=auto&forecast_days=${FORECAST_DAYS}&wind_speed_unit=kn`,
-        12000,
       ),
     ]);
 
@@ -1240,18 +1340,22 @@ export async function refreshLive(
     const sstBase = PFZ_ZONES.find((z) => z.region === harbor.region)?.sstCelsius ?? 28.2;
 
     let weather: WeatherData | null = null;
-    if (forecastPayload.status === 'fulfilled' && forecastPayload.value?.hourly) {
-      weather = buildWeather(harbor.id, harbor.shortName, forecastPayload.value.hourly, fetchedLabel);
+    if (forecastPayload?.hourly) {
+      weather = buildWeather(harbor.id, harbor.shortName, forecastPayload.hourly, fetchedLabel);
       if (weather) statuses.weather = true;
+      // Only a payload that *arrived* but yielded nothing usable is reported
+      // here. A refused fetch already recorded its own reason in
+      // `fetchUpstream`, and overwriting it would hide the real cause (a rate
+      // limit, a timeout) behind a vague "no data".
+      recordUpstreamOutcome('weather', weather !== null, 'upstream answered without usable data');
     }
-    recordUpstreamOutcome('weather', weather !== null, forecastPayload);
 
     let ocean: OceanData | null = null;
-    if (marinePayload.status === 'fulfilled' && marinePayload.value?.hourly) {
-      ocean = buildOcean(harbor.id, harbor.shortName, marinePayload.value.hourly, sstBase, fetchedLabel);
+    if (marinePayload?.hourly) {
+      ocean = buildOcean(harbor.id, harbor.shortName, marinePayload.hourly, sstBase, fetchedLabel);
       if (ocean) statuses.ocean = true;
+      recordUpstreamOutcome('ocean', ocean !== null, 'upstream answered without usable data');
     }
-    recordUpstreamOutcome('ocean', ocean !== null, marinePayload);
 
     // PFZ grounds + hotspot grid: heavier, parallel point scans.
     const [pfzResult, gridResult] = await Promise.allSettled([

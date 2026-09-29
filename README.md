@@ -241,6 +241,8 @@ Every variable is optional — see [`.env.example`](.env.example) for the annota
 | `ORCA_RATE_MAX` | `120` | Chat requests per IP per window |
 | `ORCA_RATE_WINDOW_MS` | `60000` | Chat rate-limit window |
 | `ORCA_TRUST_PROXY` | *(unset)* | `1` only behind a reverse proxy — lets the rate limiter read `X-Forwarded-For` |
+| `ORCA_RATE_LIMIT_COOLDOWN_MS` | `900000` | How long a `429`-throttled upstream product is parked before ORCA retries it (the upstream's `Retry-After` wins when present) |
+| `ORCA_NO_DATA_RETRY_MS` | `600000` | Retry cadence for a feed that answered but had no usable data for the point |
 
 ### Deployment
 
