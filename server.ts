@@ -22,7 +22,6 @@
 import 'dotenv/config';
 import express, { NextFunction, Request, Response } from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { api } from './src/server/routes';
 import { geminiStatus } from './src/server/gemini';
 import { flushSessions } from './src/server/session';
@@ -102,6 +101,10 @@ app.use('/api', api);
 
 async function start(): Promise<void> {
   if (process.env.NODE_ENV !== 'production') {
+    // Loaded only in development: a top-level `import 'vite'` would make the
+    // production container load the whole build toolchain (vite + esbuild +
+    // rollup) into memory on every boot, for a branch that never runs there.
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
