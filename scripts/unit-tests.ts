@@ -31,7 +31,7 @@ import {
 import { DATA_CYCLE, GEOFENCES, TIDE_STATIONS } from '../src/core/dataset';
 import { getPhrasebook, SUPPORTED_PHRASEBOOK_LANGUAGES, riskWord } from '../src/core/i18n';
 import { localizeCondition, localizeSource } from '../src/core/localize';
-import { buildOcean } from '../src/core/live';
+import { buildOcean, fetchPointOceanBatch } from '../src/core/live';
 import type { MarineAlert } from '../src/types';
 
 let passed = 0;
@@ -250,6 +250,92 @@ function approx(a: number, b: number, tolerance: number): boolean {
     withHole !== null && withHole.seaSurfaceTempCelsius > 20,
     withHole ? `${withHole.seaSurfaceTempCelsius}°C` : 'null',
   );
+}
+
+/* ------------------------------------------------------------------ *
+ * Section 6 — batched point sampling
+ *
+ * The fishing-ground and hotspot layers sample ~30 points through one
+ * comma-separated upstream call, so a mis-mapped response would silently
+ * attach one ground's sea temperature to another. The response echoes back
+ * *snapped* coordinates, which cannot be used to line answers up — only
+ * request order can. This pins that, and pins that a cell the model cannot
+ * answer stays absent rather than becoming a flat 0 m / 0 °C reading.
+ * ------------------------------------------------------------------ */
+
+{
+  const realFetch = globalThis.fetch;
+  const requests: string[] = [];
+  let responses: unknown[] = [];
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    requests.push(url.search);
+    const latParam = url.searchParams.get('latitude') ?? '';
+    // Answer positionally, echoing deliberately *snapped* coordinates that do
+    // not match what was asked for — exactly what the real API does.
+    const snapped = latParam.split(',').map((_, i) => `9.${i}${i}`);
+    const rows = responses.map((current, i) => ({
+      latitude: Number(snapped[i]),
+      longitude: 10 + i,
+      current,
+    }));
+    return new Response(JSON.stringify(rows), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    // 1. Every point answered, each with a distinct value.
+    responses = [
+      { sea_surface_temperature: 28.1, wave_height: 0.9, ocean_current_velocity: 0.4 },
+      { sea_surface_temperature: 27.4, wave_height: 1.8, ocean_current_velocity: 0.7 },
+      { sea_surface_temperature: 29.2, wave_height: 0.3, ocean_current_velocity: 0.2 },
+    ];
+    requests.length = 0;
+    const got = await fetchPointOceanBatch([
+      { lat: 8.9, lon: 76.3 },
+      { lat: 9.88, lon: 77.24 },
+      { lat: 10.87, lon: 78.19 },
+    ]);
+    const first = got.get('8.900,76.300');
+    const second = got.get('9.880,77.240');
+    const third = got.get('10.870,78.190');
+    check(
+      'live · batched points map onto their own answers',
+      first?.sst === 28.1 && second?.sst === 27.4 && third?.sst === 29.2,
+      `${first?.sst}/${second?.sst}/${third?.sst}`,
+    );
+    check(
+      'live · one call covers the whole batch',
+      requests.length === 1,
+      `${requests.length} call(s) for 3 points`,
+    );
+    check(
+      'live · currents convert to knots',
+      second?.currentKnots !== undefined && Math.abs((second.currentKnots ?? 0) - 1.36) < 0.02,
+      String(second?.currentKnots),
+    );
+
+    // 2. A cell with no model coverage: absent, never zero.
+    responses = [
+      { sea_surface_temperature: 28.1, wave_height: 0.9, ocean_current_velocity: 0.4 },
+      { sea_surface_temperature: null, wave_height: null, ocean_current_velocity: null },
+    ];
+    const gapped = await fetchPointOceanBatch([
+      { lat: 1.5, lon: 2.5 },
+      { lat: 42.5, lon: 87.25 },
+    ]);
+    const gap = gapped.get('42.500,87.250');
+    check(
+      'live · an uncovered cell yields no reading, not a fabricated one',
+      !gap || (gap.sst === undefined && gap.wave === undefined),
+      JSON.stringify(gap),
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 }
 
 /* ------------------------------------------------------------------ *

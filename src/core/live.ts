@@ -576,36 +576,105 @@ const CHL_SEASONALITY: Record<string, number[]> = {
 };
 
 interface PointOcean {
-  sst: number;
-  wave: number;
-  currentKnots: number;
+  /**
+   * A field is absent when the marine model has no cell for that point. It is
+   * never filled in with a zero: callers already branch on `typeof … ===
+   * 'number'`, and a fabricated 0 m wave would read as a dead-flat sea.
+   */
+  sst?: number;
+  wave?: number;
+  currentKnots?: number;
 }
 
 /** Per-coordinate cache so harbour switches do not re-fetch the same cells. */
 const POINT_CACHE = new Map<string, { fetchedAt: number; value: PointOcean }>();
 const POINT_TTL_MS = 30 * 60 * 1000;
+/** Coordinates per request; keeps the URL well inside any length limit. */
+const POINT_BATCH_SIZE = 50;
 
-async function fetchPointOcean(lat: number, lon: number, timeoutMs = 9000): Promise<PointOcean | null> {
-  const key = `${lat.toFixed(3)},${lon.toFixed(3)}`;
-  const hit = POINT_CACHE.get(key);
-  if (hit && Date.now() - hit.fetchedAt < POINT_TTL_MS) return hit.value;
-  try {
-    const url =
-      `https://marine-api.open-meteo.com/v1/marine?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}` +
-      `&current=sea_surface_temperature,wave_height,ocean_current_velocity&timezone=auto&wind_speed_unit=kn`;
-    const data = await fetchJson(url, timeoutMs);
-    const c = data?.current;
-    if (!c) return null;
-    const value: PointOcean = {
-      sst: c.sea_surface_temperature,
-      wave: c.wave_height ?? 0,
-      currentKnots: (c.ocean_current_velocity ?? 0) * MPS_TO_KNOTS,
-    };
-    POINT_CACHE.set(key, { fetchedAt: Date.now(), value });
-    return value;
-  } catch {
-    return null;
+function pointKey(lat: number, lon: number): string {
+  return `${lat.toFixed(3)},${lon.toFixed(3)}`;
+}
+
+function finiteOrAbsent(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/**
+ * Sea state at every requested point, in a single upstream call.
+ *
+ * Open-Meteo takes comma-separated coordinates and answers with one object per
+ * point, in request order. That matters: the fishing-ground and hotspot layers
+ * between them sample 30 points, and fetching each on its own was ~30 calls
+ * per refresh — enough to trip the upstream's rate limit (HTTP 429), which is
+ * what pushed the live layer onto reference data in production. Batching cuts a
+ * cold refresh to a handful of calls, so the live layer stops being throttled
+ * out of existence by its own working set.
+ *
+ * Cached points are served from memory and never re-requested. A point the model
+ * cannot answer is reported as `null` and deliberately *not* cached, so a gap in
+ * the upstream grid is re-checked on the next refresh instead of being pinned
+ * for the whole TTL.
+ */
+export async function fetchPointOceanBatch(
+  points: Array<{ lat: number; lon: number }>,
+): Promise<Map<string, PointOcean | null>> {
+  const resolved = new Map<string, PointOcean | null>();
+  const pending: Array<{ key: string; lat: number; lon: number }> = [];
+
+  for (const p of points) {
+    const key = pointKey(p.lat, p.lon);
+    const hit = POINT_CACHE.get(key);
+    if (hit && Date.now() - hit.fetchedAt < POINT_TTL_MS) {
+      resolved.set(key, hit.value);
+    } else {
+      pending.push({ key, lat: p.lat, lon: p.lon });
+    }
   }
+  if (pending.length === 0) return resolved;
+
+  for (let start = 0; start < pending.length; start += POINT_BATCH_SIZE) {
+    const slice = pending.slice(start, start + POINT_BATCH_SIZE);
+    const lats = slice.map((p) => p.lat.toFixed(3)).join(',');
+    const lons = slice.map((p) => p.lon.toFixed(3)).join(',');
+
+    let rows: any[] = [];
+    try {
+      const data = await fetchJson(
+        `https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}` +
+          `&current=sea_surface_temperature,wave_height,ocean_current_velocity&timezone=auto&wind_speed_unit=kn`,
+        12000,
+      );
+      rows = Array.isArray(data) ? data : [data];
+    } catch {
+      rows = [];
+    }
+
+    // Positional match: the response order is the request order, and the
+    // coordinates it echoes back are snapped to the model grid, so they cannot
+    // be used to line the answers up.
+    slice.forEach((p, i) => {
+      const current = rows[i]?.current;
+      const value: PointOcean | null = current
+        ? {
+            sst: finiteOrAbsent(current.sea_surface_temperature),
+            wave: finiteOrAbsent(current.wave_height),
+            currentKnots:
+              finiteOrAbsent(current.ocean_current_velocity) === undefined
+                ? undefined
+                : finiteOrAbsent(current.ocean_current_velocity)! * MPS_TO_KNOTS,
+          }
+        : null;
+      if (value && (value.sst !== undefined || value.wave !== undefined)) {
+        POINT_CACHE.set(p.key, { fetchedAt: Date.now(), value });
+        resolved.set(p.key, value);
+      } else {
+        resolved.set(p.key, null);
+      }
+    });
+  }
+
+  return resolved;
 }
 
 function regionOf(region: string): keyof typeof CHL_SEASONALITY {
@@ -619,17 +688,14 @@ function seasonalChl(region: string, monthIndex: number): number {
 
 async function buildPfzFromLive(): Promise<Array<Omit<PFZZone, 'distanceKm' | 'bearing'>> | null> {
   const points = PFZ_ZONES.map((z) => ({ z, lat: z.latitude, lon: z.longitude }));
-  const results = await Promise.allSettled(
-    points.map((p) => fetchPointOcean(p.lat, p.lon)),
-  );
+  const readings = await fetchPointOceanBatch(points);
 
   const now = new Date();
   const monthIndex = now.getMonth();
   let liveCount = 0;
 
-  const zones = points.map(({ z }, i) => {
-    const r = results[i];
-    const pt = r.status === 'fulfilled' ? r.value : null;
+  const zones = points.map(({ z, lat, lon }) => {
+    const pt = readings.get(pointKey(lat, lon)) ?? null;
     if (pt) liveCount++;
 
     const climatologyChl = seasonalChl(z.region, monthIndex);
@@ -703,7 +769,9 @@ async function buildHotspotGrid(
     }
   }
 
-  const results = await Promise.allSettled(grid.map((p) => fetchPointOcean(p.latitude, p.longitude)));
+  const readings = await fetchPointOceanBatch(
+    grid.map((p) => ({ lat: p.latitude, lon: p.longitude })),
+  );
   const now = new Date();
   const monthIndex = now.getMonth();
   const region = findNearestHarbor(center.latitude, center.longitude).region;
@@ -715,12 +783,11 @@ async function buildHotspotGrid(
   let liveCount = 0;
 
   for (let i = 0; i < grid.length; i++) {
-    const r = results[i];
-    const pt = r.status === 'fulfilled' ? r.value : null;
-    if (pt) liveCount++;
-
     const lat = grid[i].latitude;
     const lon = grid[i].longitude;
+    const pt = readings.get(pointKey(lat, lon)) ?? null;
+    if (pt) liveCount++;
+
     const distanceKm = roundTo(haversineKm(center, { latitude: lat, longitude: lon }), 0);
     if (distanceKm > spanKm) continue;
 
