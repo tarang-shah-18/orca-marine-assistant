@@ -998,6 +998,32 @@ const TIDE_SEEDS: Record<string, { m2: number; s2: number; n2: number; k1: numbe
   'tide-digha': { m2: 1.86, s2: 0.66, n2: 0.33, k1: 0.6, o1: 0.33, p1: 0.29, m4: 0.13, datum: 2.2, range: 2.8 },
 };
 
+/**
+ * Reference marine-advisory set.
+ *
+ * These entries carry no `params`, so `localizeAlertText` returns an empty
+ * patch and their `title` / `description` / `action` reach the answer verbatim,
+ * in English, in every language.
+ *
+ * That is deliberate, and it is a data-provenance boundary rather than a
+ * localisation gap. The wording is official IMD / INCOIS / GDACS bulletin
+ * text: a paraphrase of "Defer sailing until the wave period subsides" is not
+ * a translation, it is a different safety instruction, and a fisher deciding
+ * whether to launch reads it as the authority's own words. The same reasoning
+ * already governs product tokens and quoted bulletin fragments in
+ * `core/localize.ts`.
+ *
+ * The consequence is deliberate too: a non-English answer carries an English
+ * advisory block inside translated ORCA prose. `scripts/english-residue.mjs`
+ * measures that residue and will always report it for this reason — it strips
+ * guillemet-quoted fragments, but these advisories are not quoted, because the
+ * surrounding sentence is ORCA's own.
+ *
+ * The honest fix is structured `params` per advisory type (which
+ * `localizeAlertText` already renders in all eleven languages), not machine
+ * translation of a warning. Until each advisory here is expressed as params,
+ * this text stays English on purpose.
+ */
 function buildTideStation(harbor: HarborLocation): TideStation {
   const seed = TIDE_SEEDS[harbor.tideStationId] ?? TIDE_SEEDS['tide-mumbai'];
   return {
@@ -1199,6 +1225,30 @@ export const ALL_ALERT_TYPES: AlertType[] = [
 /* ------------------------------------------------------------------ *
  * Geofences
  * ------------------------------------------------------------------ */
+
+/*
+ * Why `name` and `note` stay English here, and why that is deliberate.
+ *
+ * A geofence is not ORCA prose — it is a restatement of a published access
+ * restriction. The naval exercise-area note ("Exercise and firing areas closed
+ * to civil traffic as notified. Advance permission required from the naval port
+ * authority.") and the Chilika Ramsar note ("Regulated fishing zones and a
+ * no-take core zone. Motorised craft require a registered Chilika fishing
+ * permit.") state the terms under which a competent authority grants or denies
+ * access. Paraphrasing them is not localisation, it is a different and possibly
+ * wrong instruction: "no-take zone" and "no-take core zone" are not the same
+ * commitment, and a translated "closed" that a fisher reads as "restricted but
+ * passable" is a safety defect rather than a language defect.
+ *
+ * This is the same boundary as the verbatim IMD / INCOIS / GDACS bulletins
+ * above, for the same reason, and `scripts/english-residue.mjs` masks both so
+ * the detector measures only ORCA's own prose.
+ *
+ * The zone *type* ("INTERNATIONAL_BOUNDARY", "FISHING_RESTRICTED", …) and the
+ * severity codes beside it are tokens, not sentences: they are translated in
+ * `GeofencePanel` so the fisher can read the label, and the underlying token is
+ * what the engine filters on.
+ */
 
 export const GEOFENCES: GeofenceZone[] = [
   {

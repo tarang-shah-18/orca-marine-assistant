@@ -230,6 +230,29 @@ export function applyAlertLocalization(
 }
 
 /**
+ * Display name and handling note for a vessel profile, in the fisher's language.
+ *
+ * `VesselProfile.label` and `.note` in the dataset are ORCA's own descriptive copy
+ * rather than quoted authority text, so unlike a bulletin they are translated. Agents
+ * interpolate both into the vessel-fit line a fisher reads before deciding whether to
+ * go out, so an English name there made that sentence unusable in every language
+ * except English.
+ *
+ * Falls back to the dataset strings when a profile is missing from the phrasebook, so
+ * a newly added vessel can never render as `undefined` or as a blank.
+ */
+export function vesselName(
+  profile: { id: string; label: string; note?: string },
+  book: Phrasebook = getPhrasebook('en-IN'),
+): { label: string; note: string } {
+  const localized = book.vesselProfiles[profile.id];
+  return {
+    label: localized?.label ?? profile.label,
+    note: localized?.note ?? profile.note ?? '',
+  };
+}
+
+/**
  * Localize a risk-note reason string produced by the weather/ocean agents
  * that surfaces in the vessel-fit line of the chat answer. The engine keeps
  * canonical English because the breach filter matches `/exceeds the/` before

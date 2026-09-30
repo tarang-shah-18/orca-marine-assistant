@@ -23,7 +23,7 @@ import {
 } from '../core/dataAccess';
 import { getLiveHistorical } from '../core/live';
 import { roundTo } from '../core/geo';
-import { trendWord } from '../core/i18n';
+import { trendWord, type Phrasebook } from '../core/i18n';
 
 type Trend = HistoricalData['fishProductivityTrend'];
 
@@ -40,7 +40,7 @@ export const historicalAgent: AgentDefinition = defineAgent(
     const series = getHistoricalSeries(profile.region, 36);
     const liveSeries = getLiveHistorical(profile.region);
 
-    const analysis = diagnose(series);
+    const analysis = diagnose(series, book);
 
     const data: HistoricalData = {
       region: profile.region,
@@ -56,7 +56,7 @@ export const historicalAgent: AgentDefinition = defineAgent(
       cpueChangePercent: analysis.cpueChangePercent,
       keyFactors: [
         ...analysis.correlations.map(
-          (c) => `${c.label}: r = ${c.r.toFixed(2)} (${describeStrength(Math.abs(c.r))}, ${c.direction})`,
+          (c) => `${c.label}: r = ${c.r.toFixed(2)} (${describeStrength(Math.abs(c.r), book)}, ${c.direction})`,
         ),
         ...profile.drivers,
       ],
@@ -64,9 +64,15 @@ export const historicalAgent: AgentDefinition = defineAgent(
       sstTrend: analysis.sstTrend,
       correlationAnalysis: analysis.correlations.map(
         (c) =>
-          `${c.label} vs landings: r = ${c.r.toFixed(2)} over ${series.length} months${c.lagged ? `, best at a ${c.lag}-month lag (r = ${c.laggedR.toFixed(2)})` : ''}. ${interpret(c.r)}`,
+          book.ui.correlationVerdictWord
+              .replace('{label}', c.label)
+              .replace('{r}', c.r.toFixed(2))
+              .replace('{months}', String(series.length))
+              .replace('{lagClause}', c.lagged ? lagClause(c.lag, c.laggedR, book.ui) : '') +
+            ' ' +
+            interpret(c.r, book),
       ),
-      recommendations: buildRecommendations(analysis, profile.region),
+      recommendations: buildRecommendations(analysis, profile.region, book),
       dataSources: liveSeries
         ? [
             'ERA5 reanalysis (ECMWF / Copernicus) — 36-month marine climate archive',
@@ -86,20 +92,42 @@ export const historicalAgent: AgentDefinition = defineAgent(
 
     const findings = [
       finding(
-        `Over ${series.length} months (${data.timeRange.start} to ${data.timeRange.end}), the ${profile.region} fishery shows a ${trendWord(book, analysis.trend)} landings trend, ${describeChange(analysis.catchChangePercent)}. CPUE is ${analysis.cpue} t per 1000 boat-days, ${describeChange(analysis.cpueChangePercent)} across the window.`,
+          fill(book.ui.trendWindowWord, {
+            months: series.length,
+            start: data.timeRange.start,
+            end: data.timeRange.end,
+            region: profile.region,
+            trend: trendWord(book, analysis.trend),
+            catchChange: describeChange(analysis.catchChangePercent, book),
+            cpue: analysis.cpue,
+            cpueChange: describeChange(analysis.cpueChangePercent, book),
+          }),
         {
           confidence: 0.8,
           evidence: [
-            ev('Landing trend', trendWord(book, analysis.trend), 'INCOIS annual fisheries statistics'),
+            ev(book.ui.landingTrendWord, trendWord(book, analysis.trend), 'INCOIS annual fisheries statistics'),
             ev('CPUE', `${analysis.cpue} t/1000 boat-days`, 'ORCA effort standardisation'),
-            ev('Effort change', describeChange(analysis.effortChangePercent), 'INCOIS effort register'),
+            ev(book.ui.effortChangeWord, describeChange(analysis.effortChangePercent, book), 'INCOIS effort register'),
             ev('Chlorophyll trend', trendWord(book, analysis.chlorophyllTrend), 'MODIS / VIIRS archive'),
             ev('SST trend', trendWord(book, analysis.sstTrend), 'INSAT-3D archive'),
           ],
         },
       ),
       finding(
-        `The dominant statistical driver is ${analysis.correlations[0].label} (r = ${analysis.correlations[0].r.toFixed(2)}). ${interpret(analysis.correlations[0].r)} ${analysis.correlations[1] ? `${analysis.correlations[1].label} follows at r = ${analysis.correlations[1].r.toFixed(2)}. ` : ''}${analysis.effortChangePercent > 8 ? 'Effort has risen faster than landings, so part of the apparent decline is effort dilution rather than genuine stock loss. ' : 'Effort has not risen fast enough to explain the change, so this is a real productivity signal rather than effort dilution.'}`,
+        book.ui.dominantDriverWord
+          .replace('{label}', analysis.correlations[0].label)
+          .replace('{r}', analysis.correlations[0].r.toFixed(2)) +
+          ' ' +
+          interpret(analysis.correlations[0].r, book) +
+          ' ' +
+          (analysis.correlations[1]
+            ? book.ui.secondDriverWord
+                .replace('{label}', analysis.correlations[1].label)
+                .replace('{r}', analysis.correlations[1].r.toFixed(2)) + ' '
+            : '') +
+          (analysis.effortChangePercent > 8
+            ? book.ui.effortDilutionWord
+            : book.ui.realSignalWord),
         {
           confidence: 0.75,
           evidence: analysis.correlations.map((c) =>
@@ -111,7 +139,7 @@ export const historicalAgent: AgentDefinition = defineAgent(
         `Mechanistic explanation for ${profile.region}: ${profile.drivers.join('; ')}.`,
         {
           confidence: 0.7,
-          evidence: profile.drivers.map((d) => ev('Driver', d, 'ORCA regional synthesis')),
+          evidence: profile.drivers.map((d) => ev(book.ui.driverWord, d, 'ORCA regional synthesis')),
         },
       ),
     ];
@@ -119,7 +147,12 @@ export const historicalAgent: AgentDefinition = defineAgent(
     if (analysis.lagWinner) {
       findings.push(
         finding(
-          `${analysis.lagWinner.label} leads landings by about ${analysis.lagWinner.lag} months (lagged r = ${analysis.lagWinner.laggedR.toFixed(2)} versus ${analysis.lagWinner.r.toFixed(2)} contemporaneous). That lead time is the physical lag between the ocean response and the fishery, and it is why current-year conditions do not show up in this year's landings.`,
+            fill(book.ui.lagLeaderWord, {
+              label: analysis.lagWinner.label,
+              lag: analysis.lagWinner.lag,
+              lagR: analysis.lagWinner.laggedR.toFixed(2),
+              r: analysis.lagWinner.r.toFixed(2),
+            }),
           {
             confidence: 0.7,
             evidence: [
@@ -195,7 +228,13 @@ export const historicalAgent: AgentDefinition = defineAgent(
 
     return ok(
       findings,
-      `${profile.region}: ${trendWord(book, analysis.trend)} landings, ${describeChange(analysis.catchChangePercent)}, CPUE ${describeChange(analysis.cpueChangePercent)}, driven primarily by ${analysis.correlations[0].label}.`,
+        fill(book.ui.summaryWord, {
+          region: profile.region,
+          trend: trendWord(book, analysis.trend),
+          catchChange: describeChange(analysis.catchChangePercent, book),
+          cpueChange: describeChange(analysis.cpueChangePercent, book),
+          driver: analysis.correlations[0].label,
+        }),
       [
         'INCOIS annual fisheries statistics',
         'MODIS / VIIRS ocean-colour archive',
@@ -210,7 +249,17 @@ export const historicalAgent: AgentDefinition = defineAgent(
  * Statistics
  * ------------------------------------------------------------------ */
 
-interface Correlation {
+/** The four series the historical agent correlates against landings effort. */
+export type DriverId = 'chlorophyll' | 'sst' | 'effort' | 'rainfall';
+
+export interface Correlation {
+  /**
+   * Stable identity of the correlated series, independent of `label`.
+   * `label` is localized, so branch logic must never compare against it: doing so
+   * silently disabled the chlorophyll and SST recommendations the moment the labels
+   * were translated. Compare on this instead.
+   */
+  driverId: DriverId;
   label: string;
   r: number;
   direction: string;
@@ -219,7 +268,7 @@ interface Correlation {
   laggedR: number;
 }
 
-interface Diagnosis {
+export interface Diagnosis {
   trend: Trend;
   catchChangePercent: number;
   effortChangePercent: number;
@@ -278,6 +327,31 @@ export function linearTrend(x: number[], y: number[]): { slope: number; r2: numb
 }
 
 /** Correlation of `driver` shifted forward by `lag` months against landings. */
+/**
+ * The `{lagClause}` fragment of `correlationVerdictWord`, or an empty string when
+ * no lag improves the correlation. Kept separate from the main template so the
+ * sentence reads naturally when the clause is absent, in all 11 languages.
+ */
+function lagClause(lag: number, laggedR: number, ui: Phrasebook['ui']): string {
+  return ui.lagClauseWord.replace('{lag}', String(lag)).replace('{lagR}', laggedR.toFixed(2));
+}
+
+/**
+ * Fill a phrasebook template. Written once because every sentence in this agent
+ * is a translated template with named slots; a missing slot therefore shows up
+ * as a literal `{slot}` rather than as silently wrong prose.
+ */
+function fill(
+  template: string,
+  slots: Record<string, string | number>,
+): string {
+  let out = template;
+  for (const [key, value] of Object.entries(slots)) {
+    out = out.split(`{${key}}`).join(String(value));
+  }
+  return out;
+}
+
 function laggedCorrelation(
   driver: number[],
   landings: number[],
@@ -287,7 +361,13 @@ function laggedCorrelation(
   return pearson(driver.slice(0, driver.length - lag), landings.slice(lag));
 }
 
-function diagnose(series: HistoricalPoint[]): Diagnosis {
+/**
+ * Exported for the regression suite: `buildRecommendations` is the function that
+ * silently lost its chlorophyll and SST branches when labels were localized, and
+ * it is the only place that behaviour is observable without a full agent context.
+ */
+export function diagnose(series: HistoricalPoint[], book: Phrasebook): Diagnosis {
+  const ui = book.ui;
   const landings = series.map((p) => p.catchIndex);
   const chlorophyll = series.map((p) => p.chlorophyllMgM3);
   const sst = series.map((p) => p.sstCelsius);
@@ -318,11 +398,11 @@ function diagnose(series: HistoricalPoint[]): Diagnosis {
     mean(secondHalf.map(cpueOf)),
   );
 
-  const drivers: Array<{ label: string; values: number[] }> = [
-    { label: 'chlorophyll-a', values: chlorophyll },
-    { label: 'sea surface temperature', values: sst },
-    { label: 'fishing effort', values: effort },
-    { label: 'rainfall', values: rainfall },
+    const drivers: Array<{ driverId: DriverId; label: string; values: number[] }> = [
+    { driverId: 'chlorophyll', label: ui.correlationLabelChlorophyll, values: chlorophyll },
+    { driverId: 'sst', label: ui.correlationLabelSst, values: sst },
+    { driverId: 'effort', label: ui.correlationLabelEffort, values: effort },
+    { driverId: 'rainfall', label: ui.correlationLabelRainfall, values: rainfall },
   ];
 
   const correlations: Correlation[] = drivers.map((driver) => {
@@ -339,6 +419,7 @@ function diagnose(series: HistoricalPoint[]): Diagnosis {
       }
     }
     return {
+      driverId: driver.driverId,
       label: driver.label,
       r,
       direction: r >= 0 ? 'more of it accompanies more landings' : 'more of it accompanies fewer landings',
@@ -351,8 +432,11 @@ function diagnose(series: HistoricalPoint[]): Diagnosis {
   // Effort is a *cause* of landings, not a driver of productivity: it is ranked
   // last so the answer blames the ocean rather than the fleet.
   correlations.sort((a, b) => {
-    if (a.label === 'fishing effort') return 1;
-    if (b.label === 'fishing effort') return -1;
+    // On driverId, not label: the label is localized, so this demotion silently
+    // stopped applying in ten of eleven languages and effort could be ranked the
+    // top driver, making the answer blame the fleet instead of the ocean.
+    if (a.driverId === 'effort') return 1;
+    if (b.driverId === 'effort') return -1;
     return Math.abs(b.r) - Math.abs(a.r);
   });
 
@@ -383,49 +467,88 @@ function toTrend(slope: number, meanValue: number): Trend {
   return 'stable';
 }
 
-const describeStrength = (r: number): string =>
-  r >= 0.7 ? 'very strong' : r >= 0.5 ? 'strong' : r >= 0.3 ? 'moderate' : r >= 0.15 ? 'weak' : 'negligible';
+/**
+ * Strength adjectives, and the sentence that interprets a correlation, in the
+ * fisher's own language. The `describeStrength` scale and the `interpret`
+ * sentence used to be English literals, so a Malayalam productivity answer
+ * ended in an English paragraph.
+ */
+const STRENGTH_KEYS = [
+  'veryStrongWord',
+  'strongWord',
+  'moderateWord',
+  'weakWord',
+  'negligibleWord',
+] as const;
 
-const interpret = (r: number): string => {
-  const strength = describeStrength(Math.abs(r));
-  if (Math.abs(r) < 0.15) return 'That link is too weak to act on.';
-  return `${r >= 0 ? 'A positive' : 'A negative'} ${strength} relationship — ${strength === 'negligible' ? 'no' : 'it is worth acting on this driver first'}.`;
+const describeStrength = (r: number, book: Phrasebook): string =>
+  book.ui[strengthKey(r)];
+
+const strengthKey = (r: number): (typeof STRENGTH_KEYS)[number] =>
+  r >= 0.7
+    ? 'veryStrongWord'
+    : r >= 0.5
+      ? 'strongWord'
+      : r >= 0.3
+        ? 'moderateWord'
+        : r >= 0.15
+          ? 'weakWord'
+          : 'negligibleWord';
+
+const interpret = (r: number, book: Phrasebook): string => {
+  if (Math.abs(r) < 0.15) return book.ui.weakLinkWord;
+  const key = strengthKey(Math.abs(r));
+  const sign = r >= 0 ? book.ui.positiveLinkWord : book.ui.negativeLinkWord;
+  const tail =
+    key === 'negligibleWord' ? book.ui.notWorthActingWord : book.ui.worthActingFirstWord;
+  return `${sign} ${book.ui[key]} — ${tail}.`;
 };
 
-const describeChange = (percent: number): string =>
-  `${percent > 0 ? 'up' : percent < 0 ? 'down' : 'flat'} ${Math.abs(percent)}%`;
+/** The direction word is translated; the magnitude and the % sign are not. */
+const describeChange = (percent: number, book: Phrasebook): string => {
+  const word =
+    percent > 0
+      ? book.ui.changeUpWord
+      : percent < 0
+        ? book.ui.changeDownWord
+        : book.ui.changeFlatWord;
+  return `${word} ${Math.abs(percent)}%`;
+};
 
-function buildRecommendations(analysis: Diagnosis, region: string): string[] {
+export function buildRecommendations(
+  analysis: Diagnosis,
+  region: string,
+  book: Phrasebook,
+): string[] {
   const out: string[] = [];
   const top = analysis.correlations[0];
+  const ui = book.ui;
 
-  if (top.label === 'chlorophyll-a') {
-    out.push(
-      `Chl-a is the strongest predictor for ${region}. Move fleet effort onto the satellite-derived chlorophyll fronts rather than the traditional grounds, which decouples effort from a collapsing field.`,
-    );
+  // Branch on the driver's identity, never on its label: `label` is localized, so
+  // the old `top.label === 'chlorophyll-a'` guard stopped matching the moment the
+  // labels were translated and quietly dropped both of these recommendations.
+  if (top.driverId === 'chlorophyll') {
+    out.push(fill(ui.recommendChlWord, { region }));
   }
-  if (top.label === 'sea surface temperature') {
-    out.push(
-      'Thermal structure is the binding constraint. Re-time the fleet onto the cool-season window and avoid the compressed warm-water band where the thermocline has shoaled.',
-    );
+  if (top.driverId === 'sst') {
+    out.push(ui.recommendSstWord);
   }
   if (analysis.cpueChangePercent < -8) {
     out.push(
-      `CPUE is down ${Math.abs(analysis.cpueChangePercent)}%, so this is a genuine productivity loss, not just effort dilution. A seasonal closure or effort cap should be considered rather than a fleet redeployment.`,
+      fill(ui.recommendCpueDropWord, { percent: Math.abs(analysis.cpueChangePercent) }),
     );
   } else {
-    out.push(
-      'CPUE is broadly holding, so a fleet redeployment towards better oceanography is likely to recover landings faster than a closure would.',
-    );
+    out.push(ui.recommendCpueHoldingWord);
   }
   if (analysis.lagWinner) {
     out.push(
-      `${analysis.lagWinner.label} leads landings by about ${analysis.lagWinner.lag} months. Set next season's effort using this season's ${analysis.lagWinner.label}, not last season's catch.`,
+      fill(ui.recommendNextSeasonWord, {
+        label: analysis.lagWinner.label,
+        lag: analysis.lagWinner.lag,
+      }),
     );
   }
-  out.push(
-    'Commission an independent stock assessment before any closure decision: these correlations are diagnostic of environment, not proof of stock status.',
-  );
+  out.push(ui.recommendAssessWord);
 
   return out;
 }

@@ -216,7 +216,7 @@ export const geofencingAgent: AgentDefinition = defineAgent(
           violations[0]?.inside
             ? `Position is inside ${violations[0].boundaryName}.`
             : violations[0]
-              ? `Nearest regulated zone ${violations[0].boundaryName} at ${violations[0].distanceKm} km.`
+              ? `Nearest regulated zone ${violations[0].boundaryName} ${book.ui.atWord} ${violations[0].distanceKm} km.`
               : 'No regulated zone in range.',
       },
     ];

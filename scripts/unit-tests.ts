@@ -29,6 +29,8 @@ import {
   pickHeadlineAlert,
 } from '../src/core/alerts';
 import { DATA_CYCLE, GEOFENCES, TIDE_STATIONS } from '../src/core/dataset';
+import { getHistoricalSeries } from '../src/core/dataAccess';
+import { buildRecommendations, diagnose } from '../src/agents/historicalAgent';
 import { getPhrasebook, SUPPORTED_PHRASEBOOK_LANGUAGES, riskWord } from '../src/core/i18n';
 import { localizeCondition, localizeSource } from '../src/core/localize';
 import {
@@ -39,6 +41,7 @@ import {
   upstreamFailures,
 } from '../src/core/live';
 import type { MarineAlert } from '../src/types';
+import { readFileSync } from 'node:fs';
 
 let passed = 0;
 let failed = 0;
@@ -504,6 +507,123 @@ function approx(a: number, b: number, tolerance: number): boolean {
   } finally {
     globalThis.fetch = realFetch;
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Section 8 — regression: driver identity survives localization
+ *
+ * This one shipped broken. `buildRecommendations` gated its two most useful
+ * sentences on `top.label === 'chlorophyll-a'`, and when the correlation labels
+ * were translated that comparison stopped matching — so every answer in ten of
+ * eleven languages silently lost the chlorophyll and SST recommendations. It
+ * type-checked cleanly, because `label` is still just a `string`, and it passed
+ * the "no English residue" checks, because a deleted sentence contains no
+ * English. Only asserting that the sentence is *present* catches it.
+ * ------------------------------------------------------------------ */
+
+{
+  const book = getPhrasebook('en-IN');
+  const series = getHistoricalSeries('Bay of Bengal', 36);
+  const analysis = diagnose(series, book);
+
+  // Sanity: the fixture must actually have a chlorophyll- or SST-led top
+  // correlation, otherwise "recommendation survived" proves nothing.
+  const topDriver = analysis.correlations[0]?.driverId;
+  check(
+    'regression · fixture has a driver-specific top correlation',
+    topDriver === 'chlorophyll' || topDriver === 'sst',
+    `topDriver=${topDriver}`,
+  );
+
+  const enRecs = buildRecommendations(analysis, 'Bay of Bengal', book);
+  const chlExpected = book.ui.recommendChlWord.split('{region}')[0];
+  check(
+    'regression · chlorophyll recommendation present in English',
+    topDriver === 'chlorophyll' ? enRecs.some((r) => r.startsWith(chlExpected)) : enRecs.includes(book.ui.recommendSstWord),
+    JSON.stringify(enRecs),
+  );
+
+  // The real test: the same analysis, through every other phrasebook.
+  const survivors: string[] = [];
+  const untranslated: string[] = [];
+  const unfilled: string[] = [];
+
+  for (const code of SUPPORTED_PHRASEBOOK_LANGUAGES) {
+    if (code === 'en-IN') continue;
+    const b = getPhrasebook(code);
+    const recs = buildRecommendations(analysis, 'Bay of Bengal', b);
+
+    // Present? This is what broke.
+    const present =
+      topDriver === 'chlorophyll'
+        ? recs.some((r) => r.startsWith(b.ui.recommendChlWord.split('{region}')[0]))
+        : recs.includes(b.ui.recommendSstWord);
+    if (!present) survivors.push(code);
+
+    // Translated? Absence of English is necessary but not sufficient, so the
+    // sibling assertion in Section 3 catches a wholesale English sentence.
+    const sentinel = getPhrasebook('en-IN').ui.recommendAssessWord;
+    if (recs.some((r) => r === sentinel)) untranslated.push(code);
+
+    for (const rec of recs) {
+      if (/\{[a-zA-Z]+\}/.test(rec)) unfilled.push(`${code}: ${rec}`);
+    }
+  }
+
+  check(
+    'regression · driver-specific recommendation survives all 10 translations',
+    survivors.length === 0,
+    `missing in: ${survivors.join(', ')}`,
+  );
+  check(
+    'regression · no recommendation fell back to English text',
+    untranslated.length === 0,
+    `english in: ${untranslated.join(', ')}`,
+  );
+  check(
+    'regression · every {placeholder} is filled in every language',
+    unfilled.length === 0,
+    unfilled.slice(0, 3).join(' | '),
+  );
+
+  // Identity must not be re-derivable from the label: assert the labels really
+  // do differ per language, so the guard above is actually being exercised.
+  const enLabel = analysis.correlations[0]?.label;
+  const hiLabel = diagnose(series, getPhrasebook('hi-IN')).correlations[0]?.label;
+  check(
+    'regression · labels are genuinely localized (guard is load-bearing)',
+    !!enLabel && !!hiLabel && enLabel !== hiLabel,
+    `en=${enLabel} hi=${hiLabel}`,
+  );
+
+  // The numeric diagnosis must be language-independent, or the correlation
+  // ordering would shift with the UI language.
+  const cpueHi = diagnose(series, getPhrasebook('hi-IN')).cpue;
+  check(
+    'regression · diagnosis is language-independent',
+    analysis.cpue === cpueHi,
+    `${analysis.cpue} vs ${cpueHi}`,
+  );
+
+  // Direct guard on the identity field itself.
+  check(
+    'regression · every correlation carries a driverId',
+    analysis.correlations.every((c) =>
+      ['chlorophyll', 'sst', 'effort', 'rainfall'].includes(c.driverId),
+    ),
+    JSON.stringify(analysis.correlations.map((c) => c.driverId)),
+  );
+
+  // Sweep the source for the anti-pattern itself, so it cannot come back.
+  const histSrc = readFileSync(
+    new URL('../src/agents/historicalAgent.ts', import.meta.url),
+    'utf8',
+  );
+  check(
+    'regression · no label comparison against an English literal remains',
+    !/\.label\s*===\s*'[a-z ]+'/i.test(histSrc),
+    (histSrc.match(/\.label\s*===\s*'[a-z ]+'/gi) ?? []).join(', '),
+  );
 }
 
 /* ------------------------------------------------------------------ *

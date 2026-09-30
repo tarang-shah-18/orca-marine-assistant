@@ -282,6 +282,52 @@ export interface UiStrings {
   severityMatrixWord: string;
   disasterQuestionsWord: string;
 
+  /**
+   * Agent prose that used to be hardcoded English inside `alertAgent.ts` and
+   * friends. It reached the fisher inside the answer body, so a Tamil or
+   * Malayalam answer read as a translated paragraph wrapped around an
+   * untranslated one. Templates take `{n}`, `{harbor}`, `{level}`, `{type}`,
+   * `{title}` and `{date}`.
+   */
+  advisoriesInForceWord: string;
+  advisoryIsWord: string;
+  advisoriesAreWord: string;
+  highestIsWord: string;
+  noWarningInForceWord: string;
+  lapsedWord: string;
+  computedFromLiveWord: string;
+  computedFromReferenceWord: string;
+  weakLinkWord: string;
+  positiveLinkWord: string;
+  negativeLinkWord: string;
+  notWorthActingWord: string;
+  worthActingFirstWord: string;
+  /** Correlation-strength adjectives, weakest last. */
+  veryStrongWord: string;
+  strongWord: string;
+  moderateWord: string;
+  weakWord: string;
+  negligibleWord: string;
+  dominantDriverWord: string;
+  secondDriverWord: string;
+  effortDilutionWord: string;
+  realSignalWord: string;
+
+  /**
+   * Corridor wording in `routeAgent.ts`. `describeRoute` used to build its
+   * sentence from three English style labels and three English risk clauses,
+   * so the recommendation a fisher acts on was English in every language.
+   * The style label is substituted into `{style}`; the three risk clauses are
+   * chosen by the corridor's own risk level.
+   */
+  greatCircleStyleWord: string;
+  starboardStyleWord: string;
+  inshoreStyleWord: string;
+  routeLowWord: string;
+  routeModerateWord: string;
+  routeHighWord: string;
+  corridorSummaryWord: string;
+
   /* Maritime console */
   selectedCorridorWord: string;
   viewOnMapWord: string;
@@ -394,6 +440,76 @@ export interface UiStrings {
   prescribedActionWord: string;
   seaWord: string;
   swellWord: string;
+
+    /**
+     * The two connector words the brief used to hardcode in English. "Swell SSE
+     * at 13 s" and "Wind 3 kt from SW" concatenated a number with a literal
+     * English word while everything around them was translated, so these were the
+     * only English a reader saw in the busiest lines of a non-English brief — which
+     * reads worse than a fully untranslated line, because it looks like a bug
+     * rather than a missing feature. Direction codes (SSE, SW) stay Latin by
+     * design: that is navigational shorthand on every instrument.
+     */
+    atWord: string;
+    fromWord: string;
+
+    /**
+     * Prose for the historical / productivity agent, which explains why a catch
+     * fell by correlating landings effort against chlorophyll, SST and rainfall.
+     * That analysis was emitted as literal English template strings interpolated
+     * with numbers, so a fisher asking why his own harbour was in decline got a
+     * paragraph of English about his own harbour.
+     *
+     * The statistical and scientific tokens stay Latin on purpose and are not in
+     * this file: chlorophyll-a, CPUE, SST, the r values and the units are the
+     * symbols on the instruments and in the reference literature, so translating
+     * them would make them harder to cross-check, not easier.
+     */
+    correlationLabelChlorophyll: string;
+    correlationLabelSst: string;
+    correlationLabelEffort: string;
+    correlationLabelRainfall: string;
+    correlationDirectionUp: string;
+    correlationDirectionDown: string;
+    /** `{label} vs landings: r = {r} over {months} months{lagClause}.` */
+    correlationVerdictWord: string;
+    /** `{lagClause}` is empty when no lag improves the correlation. */
+    lagClauseWord: string;
+    trendWindowWord: string;
+    lagLeaderWord: string;
+    summaryWord: string;
+    /**
+     * Direction words for the historical agent's percentage-change clause.
+     * `describeChange` used to return "up 12%" / "down 3%" / "flat 0%" and was
+     * interpolated straight into a translated sentence, which is the worst kind of
+     * leak: the frame was Tamil and the predicate was English, so the reader got a
+     * grammatically impossible sentence rather than an obviously-untranslated one.
+     */
+    changeUpWord: string;
+    changeDownWord: string;
+    changeFlatWord: string;
+    landingTrendWord: string;
+    driverWord: string;
+    effortChangeWord: string;
+    /**
+     * Full recommendation paragraphs from the historical / productivity agent.
+     *
+     * These are the sentences a harbour master acts on when the analysis says
+     * their grounds are in decline, so they were the last English prose in an
+     * otherwise translated answer. They are gated on the top correlation's
+     * `driverId`, never on its `label` — the label is localized, so comparing
+     * against it silently switched two of these recommendations off in ten of
+     * the eleven languages.
+     *
+     * Statistical tokens (CPUE, Chl-a) stay Latin in every language: they are
+     * the symbols the reader's own charts are labelled with.
+     */
+    recommendChlWord: string;
+    recommendSstWord: string;
+    recommendCpueDropWord: string;
+    recommendCpueHoldingWord: string;
+    recommendNextSeasonWord: string;
+    recommendAssessWord: string;
   gustWord: string;
   nearbyWord: string;
   checkBeforeTransitWord: string;
@@ -431,6 +547,17 @@ export interface Phrasebook {
   /** Risk level names, indexed by RISK_ORDER. */
   riskWords: [string, string, string, string];
   trendWords: [string, string, string];
+   /**
+    * Translated display name and handling note per vessel profile id. Both are
+    * ORCA's own descriptive copy rather than quoted authority text, so unlike a
+    * bulletin they are translated. They are interpolated into the vessel-fit
+    * sentence (peak wind of X kt exceeds the Y kt limit for a <name>, then the
+    * note) which is the line a fisher reads to decide whether to go out, so an
+    * English name there made the sentence unusable in every language but
+    * English. Keyed by id so a new profile is added in one place; vesselName()
+    * falls back to the dataset label if an id is ever missing.
+    */
+   vesselProfiles: Record<string, { label: string; note: string }>;
   productivityWords: [string, string, string, string];
   horizon: [string, string, string, string, string];
   headlines: {
@@ -565,6 +692,14 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
     seaStates: ['Calm', 'Rippled', 'Smooth', 'Slight', 'Moderate', 'Rough', 'Very rough', 'High', 'Very high'],
     riskWords: ['Low', 'Moderate', 'High', 'Severe'],
     trendWords: ['increasing', 'stable', 'decreasing'],
+    vesselProfiles: {
+      country_boat: { label: "Country boat / surf canoe (≤ 6 m, non-mechanised)", note: "Extremely weather-sensitive. Ashore for any ORANGE advisory." },
+      motorized_dinghy: { label: "Motorised dinghy / FRP boat (6-10 m)", note: "The default profile. Keep an escape route to the nearest safe haven." },
+      gillnetter: { label: "Gillnetter (10-14 m)", note: "Can work marginally in 2.5 m seas if the swell period is short." },
+      trawler: { label: "Trawler (15-20 m, mechanised)", note: "Stable in moderate rough sea. Avoid crossing a gale-front swell." },
+      purse_seiner: { label: "Purse seiner (20 m+)", note: "Fast enough to outrun a decaying squall; mind the net-set clearance time." },
+      deep_sea_trawler: { label: "Deep-sea trawler (25 m+)", note: "Only profile ORCA rates for the northern oceanic and Wadge Bank grounds." },
+    },
     productivityWords: ['Excellent', 'Good', 'Fair', 'Poor'],
     horizon: ['now', 'today', 'tomorrow', 'for the next 3 days', 'this week'],
     ui: {
@@ -677,6 +812,60 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       validUntilWord: 'Valid until {date}',
       severityMatrixWord: 'Advisory severity matrix',
       disasterQuestionsWord: 'Disaster management questions',
+      dominantDriverWord: 'The dominant statistical driver is {label} (r = {r}).',
+      secondDriverWord: '{label} follows at r = {r}.',
+      effortDilutionWord: 'శ్రమం ఉత్పత్తికంటే వేగంగా పెరిగింది, కాబట్టి తగ్గుదలలో కొంత భాగం నిజమైన స్టాక్ నష్టం కాకుండా శ్రమ త్రుతిపీడనం నుండి ఉంది.',
+      realSignalWord: 'ఈ మార్పును శ్రమం వివరించలేదు, కాబట్టి ఇది నిజమైన ఉత్పాదకత సంకేతం, శ్రమ త్రుతిపీడనం కాదు.',
+      advisoriesInForceWord: '{n} {count} in force or approaching for {harbor}.',
+      advisoryIsWord: 'advisory is',
+      advisoriesAreWord: 'advisories are',
+      highestIsWord: 'Highest is a {level} {type}: {title}.',
+      noWarningInForceWord: 'No IMD or INCOIS marine warning is in force for {harbor} in the current cycle. That is a statement about the bulletin, not a guarantee of conditions.',
+      lapsedWord: '{title} — {level} {type} over {harbor} lapsed on {date} and no longer governs this cycle.',
+      computedFromLiveWord: 'Computed from the live forecast series.',
+      computedFromReferenceWord: 'Computed from the reference forecast series; the live feed was unreachable at this run.',
+      weakLinkWord: 'That link is too weak to act on.',
+      positiveLinkWord: 'A positive',
+      negativeLinkWord: 'A negative',
+      notWorthActingWord: 'no',
+      worthActingFirstWord: 'it is worth acting on this driver first',
+      veryStrongWord: 'very strong',
+      strongWord: 'strong',
+      moderateWord: 'moderate',
+      weakWord: 'weak',
+      negligibleWord: 'negligible',
+      greatCircleStyleWord: 'The direct great-circle track',
+      starboardStyleWord: 'A starboard offset corridor',
+      inshoreStyleWord: 'An inshore corridor trading distance for shelter',
+      routeLowWord: '{style} is recommended: {km} km at {score}/100 safety, clear of every hazard cell.',
+      routeModerateWord: '{style} is the best of the options tested, but conditions are marginal: seas reach {wave} m and winds {wind} kt.',
+      routeHighWord: '{style} still scores {score}/100, but no corridor is comfortable for this vessel. Treat the trip as unsafe and re-check after the next bulletin.',
+      corridorSummaryWord: 'The safest corridor from {from} to {to} is {km} km, about {eta} at {speed} kt. Safety score {score}/100 with a {risk} overall rating.',
+      atWord: 'at',
+      fromWord: 'from',
+      correlationLabelChlorophyll: 'chlorophyll-a',
+      correlationLabelSst: 'sea surface temperature',
+      correlationLabelEffort: 'fishing effort',
+      correlationLabelRainfall: 'rainfall',
+      correlationDirectionUp: 'more of it accompanies more landings',
+      correlationDirectionDown: 'more of it accompanies fewer landings',
+      correlationVerdictWord: '{label} vs landings: r = {r} over {months} months{lagClause}.',
+      lagClauseWord: ', best at a {lag}-month lag (r = {lagR})',
+      trendWindowWord: 'Over {months} months ({start} to {end}), the {region} fishery shows a {trend} landings trend, {catchChange}. CPUE is {cpue} t per 1000 boat-days, {cpueChange} across the window.',
+      lagLeaderWord: '{label} leads landings by about {lag} months (lagged r = {lagR} versus {r} contemporaneous). That lead time is the physical lag between the ocean response and the fishery, and it is why current-year conditions do not show up in this year’s landings.',
+      summaryWord: '{region}: {trend} landings, {catchChange}, CPUE {cpueChange}, driven primarily by {driver}.',
+      effortChangeWord: 'Effort change',
+      changeUpWord: 'up',
+      changeDownWord: 'down',
+      changeFlatWord: 'flat',
+      landingTrendWord: 'Landing trend',
+      driverWord: 'Driver',
+      recommendChlWord: 'Chl-a is the strongest predictor for {region}. Move fleet effort onto the satellite-derived chlorophyll fronts rather than the traditional grounds, which decouples effort from a collapsing field.',
+      recommendSstWord: 'Thermal structure is the binding constraint. Re-time the fleet onto the cool-season window and avoid the compressed warm-water band where the thermocline has shoaled.',
+      recommendCpueDropWord: 'CPUE is down {percent}%, so this is a genuine productivity loss, not just effort dilution. A seasonal closure or effort cap should be considered rather than a fleet redeployment.',
+      recommendCpueHoldingWord: 'CPUE is broadly holding, so a fleet redeployment towards better oceanography is likely to recover landings faster than a closure would.',
+      recommendNextSeasonWord: '{label} leads landings by about {lag} months. Set next season’s effort using this season’s {label}, not last season’s catch.',
+      recommendAssessWord: 'Commission an independent stock assessment before any closure decision: these correlations are diagnostic of environment, not proof of stock status.',
 
       selectedCorridorWord: 'Selected corridor',
       viewOnMapWord: 'View on map →',
@@ -1079,6 +1268,14 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
     seaStates: ['शांत', 'हल्की ऊर्मि', 'चिकनी', 'हल्का', 'मध्यम', 'ऊबड़खाबड़', 'बहुत ऊबड़खाबड़', 'उच्च', 'अत्यधिक'],
     riskWords: ['कम', 'मध्यम', 'उच्च', 'गंभीर'],
     trendWords: ['बढ़ी हुई', 'स्थिर', 'घटी हुई'],
+    vesselProfiles: {
+      country_boat: { label: "देशी नाव / सर्फ कैनो (≤ 6 मीटर, गैर-यांत्रिक)", note: "मौसम के प्रति अत्यंत संवेदनशील। कोई भी ORANGE चेतावनी हो तो किनारे पर रहें।" },
+      motorized_dinghy: { label: "मोटरयुक्त डिंगी / FRP नाव (6-10 मीटर)", note: "डिफ़ॉल्ट प्रोफ़ाइल। निकटतम सुरक्षित आश्रय तक पलायन मार्ग बनाए रखें।" },
+      gillnetter: { label: "गिलनेटर (10-14 मीटर)", note: "यदि लहर की अवधि कम हो तो 2.5 मीटर लहरों में सीमांत रूप से काम कर सकता है।" },
+      trawler: { label: "ट्रॉलर (15-20 मीटर, यांत्रिक)", note: "मध्यम कठोर समुद्र में स्थिर। आंधी-अगाड़ी की लहर को पार न करें।" },
+      purse_seiner: { label: "पर्स सेइनर (20 मीटर से ऊपर)", note: "क्षीण होती आंधी से बचने के लिए पर्याप्त तेज़। जाल लगाने का समय ध्यान रखें।" },
+      deep_sea_trawler: { label: "गहरे समुद्री ट्रॉलर (25 मीटर से ऊपर)", note: "उत्तरी महासागर और वेज बैंक क्षेत्रों के लिए ORCA द्वारा रेट की गई एकमात्र प्रोफ़ाइल।" },
+    },
     productivityWords: ['उत्कृष्ट', 'अच्छी', 'ठीक', 'खराब'],
     horizon: ['अभी', 'आज', 'कल', 'अगले 3 दिनों के लिए', 'इस सप्ताह'],
     ui: {
@@ -1186,6 +1383,60 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       validUntilWord: '{date} तक मान्य',
       severityMatrixWord: 'चेतावनी गंभीरता मैट्रिक्स',
       disasterQuestionsWord: 'आपदा प्रबंधन प्रश्न',
+      dominantDriverWord: 'प्रमुख सांख्यिकीय कारक {label} है (r = {r})।',
+      secondDriverWord: '{label} का r = {r} के साथ पीछे है।',
+      effortDilutionWord: 'प्रयास उत्पादन से तेजी से बढ़ा है, इसलिए गिरावट का कुछ भाग वास्तविक स्टॉक घटाने के बजाय प्रयास-विलय है।',
+      realSignalWord: 'प्रयास इस बदलाव की व्याख्या नहीं कर पाता, इसलिए यह वास्तविक उत्पादकता संकेत है, प्रयास-विलय नहीं।',
+      veryStrongWord: 'बहुत मजबूत',
+      strongWord: 'मजबूत',
+      moderateWord: 'मध्यम',
+      weakWord: 'कमज़ोर',
+      negligibleWord: 'नगण्य',
+      advisoriesInForceWord: '{harbor} के लिए {n} {count} लागू या निकटस्थ।',
+      advisoryIsWord: 'चेतावनी है',
+      advisoriesAreWord: 'चेतावनियाँ हैं',
+      highestIsWord: 'सर्वाधिक गंभीर {level} {type}: {title}।',
+      noWarningInForceWord: 'वर्तमान चक्र में {harbor} के लिए कोई IMD या INCOIS समुद्री चेतावनी लागू नहीं है। यह बुलेटिन के बारे में एक बात है, परिस्थितियों की गारंटी नहीं।',
+      lapsedWord: '{title} — {harbor} पर {level} {type} {date} को समाप्त हो गया और अब इस चक्र में लागू नहीं है।',
+      computedFromLiveWord: 'यह लाइव पूर्वानुमान श्रृंखला से गणना की गई है।',
+      computedFromReferenceWord: 'यह संदर्भ पूर्वानुमान श्रृंखला से गणना की गई है; इस रन में लाइव फ़ीड उपलब्ध नहीं थी।',
+      weakLinkWord: 'यह संबंध कार्रवाई के लिए बहुत कमज़ोर है।',
+      positiveLinkWord: 'एक सकारात्मक',
+      negativeLinkWord: 'एक नकारात्मक',
+      notWorthActingWord: 'नहीं',
+      worthActingFirstWord: 'इस कारक पर पहले कार्रवाई करने लायक है',
+      greatCircleStyleWord: 'सीधा ग्रेट-सर्कल मार्ग',
+      starboardStyleWord: 'स्टारबोर्ड ऑफसेट कॉरिडोर',
+      inshoreStyleWord: 'आश्रय के लिए दूरी छोड़कर अंतर्देशीय कॉरिडोर',
+      routeLowWord: '{style} की सिफारिश की जाती है: {km} km, सुरक्षा {score}/100, हर खतरा कोष से मुक्त।',
+      routeModerateWord: '{style} परीक्षित विकल्पों में सबसे अच्छा है, पर हालात सीमांत हैं: समुद्र {wave} m तक और हवा {wind} kt।',
+      routeHighWord: '{style} अब भी {score}/100 देता है, पर इस जहाज़ के लिए कोई कॉरिडोर आरामदायक नहीं। यात्रा को असुरक्षित मानें और अगली बुलेटिन के बाद दोबारा जाँचें।',
+      corridorSummaryWord: '{from} से {to} तक सबसे सुरक्षित कॉरिडोर {km} km है, लगभग {eta}, {speed} kt पर। सुरक्षा अंक {score}/100, कुल मूल्यांकन {risk}।',
+      atWord: 'पर',
+      fromWord: 'से',
+      correlationLabelChlorophyll: 'क्लोरोफिल-ए',
+      correlationLabelSst: 'समुद्री सतह तापमान',
+      correlationLabelEffort: 'मछली पकड़ने का प्रयास',
+      correlationLabelRainfall: 'वर्षा',
+      correlationDirectionUp: 'इसकी मात्रा बढ़ने पर उत्पादन भी बढ़ता है',
+      correlationDirectionDown: 'इसकी मात्रा बढ़ने पर उत्पादन घटता है',
+      correlationVerdictWord: '{label} बनाम उत्पादन: {months} महीनों में r = {r}{lagClause}.',
+      lagClauseWord: ', सर्वोत्तम {lag}-महीने की देरी पर (r = {lagR})',
+      trendWindowWord: '{months} महीनों में ({start} से {end}), {region} की मत्स्य-निर्यात में उत्पादन {trend} है, {catchChange}. CPUE {cpue} टन प्रति 1000 नाव-दिन, इस अवधि में {cpueChange}.',
+      lagLeaderWord: '{label} लगभग {lag} महीने पहले उत्पादन का नेतृत्व करता है (विलंबित r = {lagR} बनाम तत्काल r = {r})। यही वह भौतिक देरी है जो समुद्र की प्रतिक्रिया और मत्स्य-निर्यात के बीच होती है, इसीलिए इस वर्ष की स्थितियाँ इस वर्ष के उत्पादन में नहीं दिखतीं।',
+      summaryWord: '{region}: उत्पादन {trend}, {catchChange}, CPUE {cpueChange}, मुख्य रूप से {driver} से प्रेरित।',
+      effortChangeWord: 'प्रयास में परिवर्तन',
+      changeUpWord: 'ऊपर',
+      changeDownWord: 'नीचे',
+      changeFlatWord: 'स्थिर',
+      landingTrendWord: 'उत्पादन की प्रवृत्ति',
+      driverWord: 'कारक',
+      recommendChlWord: '{region} के लिए सबसे शक्तिशाली संकेतक Chl-a है। प्रयास को पारंपरिक मत्स्य-क्षेत्रों के बजाय उपग्रह से प्राप्त क्लोरोफिल मोर्चों पर ले जाएँ, जिससे प्रयास एक नष्ट होते क्षेत्र से अलग हो जाता है।',
+      recommendSstWord: 'तापीय संरचना ही बाधा है। मछली-वाहकों को ठंडे मौसम की अवधि में ले जाएँ और उस संकीर्ण गर्म जल पट्टी से बचें जहाथर्मोक्लाइन ऊपरी आ गया है।',
+      recommendCpueDropWord: 'CPUE {percent}% गिरा है, इसलिए यह वास्तविक उत्पादन-हानि है, केवल प्रयास-विलय नहीं। मछली-वाहकों को दोबारा लगाने के बजाय मौसमी बंदी या प्रयास-सीमा पर विचार करना चाहिए।',
+      recommendCpueHoldingWord: 'CPUE मोटे तौर पर स्थिर है, इसलिए बेहतर समुद्र-विज्ञान की ओर मछली-वाहकों को ले जाने से बंदी की तुलना में उत्पादन तेज़ी से बहाल होगा।',
+      recommendNextSeasonWord: '{label} लगभग {lag} महीने पहले उत्पादन का नेतृत्व करता है। अगले मौसम का प्रयास तय करने के लिए इस मौसम का {label} लें, पिछले मौसम की उपलब्धि नहीं।',
+      recommendAssessWord: 'बंदी के किसी भी निर्णय से पहले स्वतंत्र मत्स्य-मूल्यांकन कराएँ: ये सहसंबंध पर्यावरण का संकेत हैं, स्टॉक की स्थिति का प्रमाण नहीं।',
 
       selectedCorridorWord: 'चयनित गलियारा',
       viewOnMapWord: 'मानचित्र पर देखें →',
@@ -1586,6 +1837,14 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
     seaStates: ['शांत', 'हलकी लाटी', 'सपाट', 'हलके', 'मध्यम', 'खरबड', 'फार खरबड', 'उंच', 'फार उंच'],
     riskWords: ['कमी', 'मध्यम', 'उच्च', 'गंभीर'],
     trendWords: ['वाढलेली', 'स्थिर', 'घटलेली'],
+    vesselProfiles: {
+      country_boat: { label: "देशी नाव / सर्फ कॅनो (≤ 6 मीटर, यांत्रिक नसलेली)", note: "हवामानाच्या अत्यंत प्रतिसंवेदी. ORANGE सूचना असेल तर किनाऱ्यावर रहा." },
+      motorized_dinghy: { label: "मोटारयुक्त डिंगी / FRP नाव (6-10 मीटर)", note: "डीफॉल्ट प्रोफाइल. जवळच्या सुरक्षित आसरामापर्यंत पळण्याचा मार्ग ठेवा." },
+      gillnetter: { label: "गिलनेटर (10-14 मीटर)", note: "लाटांचा कालावधी कमी असल्यास 2.5 मीटर लाटांत अंशतः काम करू शकते." },
+      trawler: { label: "ट्रॉलर (15-20 मीटर, यांत्रिक)", note: "मध्यम कठोर समुद्रात स्थिर. वादळ-पुढच्या लाटा ओलांडू नका." },
+      purse_seiner: { label: "पर्स सेिनर (20 मीटरपेक्षा जास्त)", note: "मंदावत जाणाऱ्या वादळापासून पळण्यास पुरेशे वेगवान. जाळे टाकण्याचा वेळ लक्षात ठेवा." },
+      deep_sea_trawler: { label: "खोल समुद्री ट्रॉलर (25 मीटरपेक्षा जास्त)", note: "उत्तर महासागर आणि वेज बँक मतदारसंघांसाठी ORCA कडून रेट केलेली एकमात्र प्रोफाइल." },
+    },
     productivityWords: ['उत्कृष्ट', 'चांगली', 'ठीक', 'खराब'],
     horizon: ['आता', 'आज', 'उद्या', 'पुढील ३ दिवसांसाठी', 'या आठवड्यात'],
     ui: {
@@ -1693,6 +1952,60 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       validUntilWord: '{date} पर्यंत वैध',
       severityMatrixWord: 'सूचना गंभीरता मॅट्रिक्स',
       disasterQuestionsWord: 'आपत्ती व्यवस्थापन प्रश्न',
+      dominantDriverWord: 'प्रमुख सांख्यिकीय घटक {label} आहे (r = {r}).',
+      secondDriverWord: '{label} चा r = {r} सोबत मागू आहे.',
+      effortDilutionWord: 'प्रयास उत्पादनापेक्षा जास्त वाढला आहे, त्यामुळे घटणांचा काही भाग खऱ्या साठ्याच्या नुकसानाऐवजी प्रयास-विलय आहे.',
+      realSignalWord: 'प्रयास या बदलाचे स्पष्टीकरण करत नाही, त्यामुळे हे खरे उत्पादकतेचे संकेत आहे, प्रयास-विलय नाही.',
+      veryStrongWord: 'अतिशय मजबूत',
+      strongWord: 'मजबूत',
+      moderateWord: 'मध्यम',
+      weakWord: 'कमजोर',
+      negligibleWord: 'गौण',
+      advisoriesInForceWord: '{harbor} साठी {n} {count} लागू किंवा जवळच्या आहेत.',
+      advisoryIsWord: 'सूचना आहे',
+      advisoriesAreWord: 'सूचना आहेत',
+      highestIsWord: 'सर्वाधिक गंभीर {level} {type}: {title}.',
+      noWarningInForceWord: 'सध्या चक्रात {harbor} साठी कोणतेही IMD किंवा INCOIS सागरीय सूचना लागू नाही. हे बुलेटनविषयकाचे वक्तव्य आहे, परिस्थितींची हमी नाही.',
+      lapsedWord: '{title} — {harbor} वरील {level} {type} {date} रोजी समाप्त झाले आणि आता या चक्रात लागू नाही.',
+      computedFromLiveWord: 'ही माहिती थेट अंदाज श्रृंखलेमून गणना करून काढली आहे.',
+      computedFromReferenceWord: 'ही माहिती संदर्भ अंदाज श्रृंखलेमून गणना करून काढली आहे; या वेळी थेट माहिती उपलब्ध नव्हती.',
+      weakLinkWord: 'हा संबंध कृतीसाठी खूप कमजोर आहे.',
+      positiveLinkWord: 'एक सकारात्मक',
+      negativeLinkWord: 'एक नकारात्मक',
+      notWorthActingWord: 'नाही',
+      worthActingFirstWord: 'या घटकावर आधी कृती करणे योग्य आहे',
+      greatCircleStyleWord: 'थेट ग्रेट-सर्कल मार्ग',
+      starboardStyleWord: 'स्टारबोर्ड ऑफसेट कॉर्डोर',
+      inshoreStyleWord: 'आश्रयासाठी अंतर्देशीय कॉर्डोर',
+      routeLowWord: '{style} शिफारस केली जाते: {km} km, सुरक्षा {score}/100, प्रत्येक धोका क्षेत्रातून मुक्त।',
+      routeModerateWord: '{style} तपासलेल्या पर्यायांत सर्वोत्तम आहे, पर परिस्थिती सीमांत आहे: समुद्र {wave} m पर्यंत, वारा {wind} kt।',
+      routeHighWord: '{style} अद्याप {score}/100 देतो, पर या जहाजासाठी कोणताही कॉर्डोर आरामदायक नाही. प्रवास असुरक्षित माना आणि पुढील बुलेटिननंतर पुन्हा तपासा.',
+      corridorSummaryWord: '{from} पासून {to} पर्यंत सर्वात सुरक्षित कॉर्डोर {km} km आहे, सुमारे {eta}, {speed} kt वर. सुरक्षा गुण {score}/100, एकूण रेटिंग {risk}.',
+      atWord: 'वर',
+      fromWord: 'हून',
+      correlationLabelChlorophyll: 'क्लोरोफिल-अ',
+      correlationLabelSst: 'समुद्री पृष्ठभूमी तापमान',
+      correlationLabelEffort: 'मासेमार प्रयत्न',
+      correlationLabelRainfall: 'पावस',
+      correlationDirectionUp: 'याचे प्रमाण वाढल्यास उत्पादनही वाढते',
+      correlationDirectionDown: 'याचे प्रमाण वाढल्यास उत्पादन घटते',
+      correlationVerdictWord: '{label} विरुद्ध उत्पादन: {months} महिन्यांत r = {r}{lagClause}.',
+      lagClauseWord: ', {lag}-महिन्यांच्या उशिरा सर्वोत्तम (r = {lagR})',
+      trendWindowWord: '{months} महिन्यांत ({start} ते {end}), {region} चा मासेमारी उत्पादन {trend} आहे, {catchChange}. CPUE {cpue} टन प्रति 1000 नावदिवस, या कालावधीत {cpueChange}.',
+      lagLeaderWord: '{label} सुमारे {lag} महिने आधी उत्पादनाचा आघाडीवर आहे (विलंबित r = {lagR} विरुद्ध तात्कालिक r = {r}). हाच तो भौतिक उशीर आहे जो समुद्राच्या प्रतिसादा आणि मासेमारीमध्ये असतो, आणि म्हणूनच यंदाची परिस्थिती यंदाच्या उत्पादनात दिसत नाही.',
+      summaryWord: '{region}: उत्पादन {trend}, {catchChange}, CPUE {cpueChange}, मुख्यतः {driver} मुळे.',
+      effortChangeWord: 'प्रयत्नातील बदल',
+      changeUpWord: 'वाढले',
+      changeDownWord: 'घटले',
+      changeFlatWord: 'स्थिर',
+      landingTrendWord: 'उत्पादन कल',
+      driverWord: 'कारक',
+      recommendChlWord: '{region} साठी सर्वात्मक अंदाजा Chl-a आहे. प्रयत्न पारंपरिक मासेमारी मैदानांवर न टाकता उपग्रहातून मिळालेल्या क्लोरोफिलच्या पुढ्यावर न्याावा, ज्यामुळे प्रयत्न नष्ट होणाऱ्या क्षेत्रापासून वेगळा होतो.',
+      recommendSstWord: 'उष्णकिंड हाच अडथळा आहे. मासेमारी डॉट्यांना थंड हंगामाच्या खिडकीत हलवा आणि अगदी सैत कसलेल्या गरम पाण्याच्या पट्ट्यातून वाचा.',
+      recommendCpueDropWord: 'CPUE {percent}% घटला आहे, त्यामुळे ही खरी उत्पादन-घटी आहे, केवळ प्रयत्न-संमिशन नाही. डॉट्यांना पुन्हा लावण्याऐवजी हंगामी बंदी किंवा प्रयत्न-मर्यादा विचारात घ्यावी.',
+      recommendCpueHoldingWord: 'CPUE मोठ्या प्रमाणे स्थिर आहे, त्यामुळे चांगल्या समुद्र-विज्ञानाकडे डॉटे हलवल्यास बंदीपेक्षा उत्पादन लवकर बाहेर येईल.',
+      recommendNextSeasonWord: '{label} सुमारे {lag} महिने आधी उत्पादनाचा आघाडीवर आहे. पुढील हंगामाचा प्रयत्न ठरवताना या हंगामाचा {label} घ्या, मागील हंगामाची मातंया नाही.',
+      recommendAssessWord: 'बंदीच्या कोणत्याही निर्णयापूर्वी स्वतंत्र साठ संचनन करून घ्या: हे सहसंबंध पर्यावरणाचे निदान आहेत, साठ स्थितीचा पुरावा नाहीत.',
 
       selectedCorridorWord: 'निवडलेली गल्ली',
       viewOnMapWord: 'नकाशावर पहा →',
@@ -2093,6 +2406,14 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
     seaStates: ['શાંત', 'હળવી લહેરાવટું', 'સપાટ', 'હળવું', 'મધ્યમ', 'ખરબર', 'ઘણું ખરબર', 'ઊંચું', 'અતિ ઊંચું'],
     riskWords: ['ઓછું', 'મધ્યમ', 'ઊંચું', 'ગંભીર'],
     trendWords: ['વધેલી', 'સ્થિર', 'ઘટેલી'],
+    vesselProfiles: {
+      country_boat: { label: "દેશી નાવ / સર્ફ કેનો (≤ 6 મીટર, બિન-યાંત્રિક)", note: "હવામાન પ્રતિ અત્યંત સંવેદનશીલ. કોઈપણ ORANGE ચેતવણી હોય તો કિનારે રહો." },
+      motorized_dinghy: { label: "મોટારચાલિત ડિંગી / FRP નાવ (6-10 મીટર)", note: "ડિફૉલ્ટ પ્રોફાઇલ. નજીકના સુરક્ષિત આશ્રય સુધી ભાગવાનો રસ્તો રાખો." },
+      gillnetter: { label: "ગિલનેટર (10-14 મીટર)", note: "લહેરનો સમયગાળો ઓછો હોય તો 2.5 મીટરના લહેરામાં સહજ કામ કરી શકે છે." },
+      trawler: { label: "ટ્રોલર (15-20 મીટર, યાંત્રિક)", note: "મધ્યમ અસ્તર સમુદ્રમાં સ્થિર. તોફાનની આગળ આવતા લહેરા ઓળંગવો નહીં." },
+      purse_seiner: { label: "પર્સ સીનર (20 મીટરથી વધુ)", note: "નબળું થતું તોફાન ટાળવા પૂરતું ઝડપી. જાળ પાડવાનો સમય ધ્યાનમાં રાખો." },
+      deep_sea_trawler: { label: "ઊંડા સમુદ્રનું ટ્રોલર (25 મીટરથી વધુ)", note: "ઉત્તરી દરિયાકિનારા અને વેજ બેંક મીઠાં માટે ORCA દ્વારા રેટ કરેલી એકમાત્ર પ્રોફાઇલ." },
+    },
     productivityWords: ['ઉત્તમ', 'સારું', 'ઠીક', 'ખરાબ'],
     horizon: ['હવે', 'આજે', 'કાલે', 'આગલા 3 દિવસ માટે', 'આ અઠવાડિયે'],
     ui: {
@@ -2200,6 +2521,60 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       validUntilWord: '{date} સુધી માન્ય',
       severityMatrixWord: 'સૂચના ગંભીરતા મેટ્રિક્સ',
       disasterQuestionsWord: 'આપત્તિ વ્યવસ્થાપન પ્રશ્નો',
+      dominantDriverWord: 'મુખ્ય આંકડાકીય કારક {label} છે (r = {r}).',
+      secondDriverWord: '{label} r = {r} સાથે પાછું છે.',
+      effortDilutionWord: 'મૂલવાન ઉત્પાદન કરતા ઝડપથી વધ્યું છે, તેથી ઘટાડાનો કેટલોક ભાગ સાચા સ્ટોકના નુકશાન વગરે મૂલવાન-વિલવણી છે.',
+      realSignalWord: 'મૂલવાન આ ફેરફારની સમજૂતી આપતું નથી, તેથી આ ખરેખરો ઉત્પાદકતાનો સંકેત છે, મૂલવાન-વિલવણી નહીં.',
+      veryStrongWord: 'ઘણું મજબૂત',
+      strongWord: 'મજબૂત',
+      moderateWord: 'મધ્યમ',
+      weakWord: 'નબળું',
+      negligibleWord: 'અગણિય',
+      advisoriesInForceWord: '{harbor} માટે {n} {count} અમલમાં છે અથવા નજીક છે.',
+      advisoryIsWord: 'સલાહ છે',
+      advisoriesAreWord: 'સલાહો છે',
+      highestIsWord: 'સૌથી ગંભીર {level} {type}: {title}.',
+      noWarningInForceWord: 'વર્તમાન ચક્રમાં {harbor} માટે કોઈ IMD કે INCOIS દરિયાકીય ચેતવણી અમલમાં નથી. આ બુલેટિન વિશે વાત છે, પરિસ્થિતિની ગેરંટી નથી.',
+      lapsedWord: '{title} — {harbor} પર {level} {type} {date} ના રોજ સમાપ્ત થયું અને હવે આ ચક્રમાં અમલમાં નથી.',
+      computedFromLiveWord: 'આ લાઇવ આગાહી શ્રેણીમાંથી ગણતરી કરવામાં આવી છે.',
+      computedFromReferenceWord: 'આ સંદર્ભ આગાહી શ્રેણીમાંથી ગણતરી કરવામાં આવી છે; આ વખતે લાઇવ ડેટા ઉપલબ્ધ નહોતો.',
+      weakLinkWord: 'આ સંબંધ કાર્યવાહી માટે ઘણો નબળો છે.',
+      positiveLinkWord: 'એક સાકારાત્મક',
+      negativeLinkWord: 'એક નકારાત્મક',
+      notWorthActingWord: 'નહીં',
+      worthActingFirstWord: 'આ પરિબળ પર પહેલાં કાર્યવાહી કરવી યોગ્ય છે',
+      greatCircleStyleWord: 'સીધી ગ્રેટ-સર્કલ માર્ગ',
+      starboardStyleWord: 'સ્ટારબોર્ડ ઑફસેટ કોરિડોર',
+      inshoreStyleWord: 'આશ્રય માટે અંદરના કોરિડોર',
+      routeLowWord: '{style} ભલામણ કરવામાં આવે છે: {km} km, સુરક્ષા {score}/100, દરેક જોખમ વિભાગથી મુક્ત।',
+      routeModerateWord: '{style} પરીક્ષિત વિકલ્પો માં શ્રેષ્ઠ છે, પણ પરિસ્થિતિ સીમાંત છે: દરિયા {wave} m સુધી, પવન {wind} kt।',
+      routeHighWord: '{style} હજી {score}/100 આપે છે, પણ આ જહાજ માટે કોઈ કોરિડોર આરામદાયક નથી. મુસાફરી અસુરક્ષિત ગણો અને આગલી બુલેટિન પછી ફરી તપાસો.',
+      corridorSummaryWord: '{from} થી {to} સુધીનો સૌથી સુરક્ષિત કોરિડોર {km} km છે, લગભગ {eta}, {speed} kt પર. સુરક્ષા સ્કોર {score}/100, કુલ મૂલ્યાંકન {risk}.',
+      atWord: 'પર',
+      fromWord: 'થી',
+      correlationLabelChlorophyll: 'ક્લોરોફિલ-એ',
+      correlationLabelSst: 'દરિયાની સપાટીનું તાપમાન',
+      correlationLabelEffort: 'માછલી પકડનો પ્રયાસ',
+      correlationLabelRainfall: 'વરસાદ',
+      correlationDirectionUp: 'આનો જથ્થો વધે ત્યારે ઉત્પાદન પણ વધે છે',
+      correlationDirectionDown: 'આનો જથ્થો વધે ત્યારે ઉત્પાદન ઘટે છે',
+      correlationVerdictWord: '{label વિરુદ્ધ ઉત્પાદન: {months} મહિનામાં r = {r}{lagClause}.',
+      lagClauseWord: ', {lag} મહિનાની વિલંબમાં શ્રેષ્ઠ (r = {lagR})',
+      trendWindowWord: '{months} મહિનામાં ({start} થી {end}), {region} ની માછલી પકડમાં ઉત્પાદન {trend} છે, {catchChange}. CPUE {cpue} ટન પ્રતિ 1000 નૌકા-દિવસ, આ સમયગાળામાં {cpueChange}.',
+      lagLeaderWord: '{label} લગભગ {lag} મહિના પહેલાં ઉત્પાદનનું નેતૃવ કરે છે (વિલંબિત r = {lagR} સામે તાત્કાલિક r = {r}). દરિયાની પ્રતિસાદ અને માછલી પકડ વચ્ચે આ જ ભૌતિક વિલંબ છે, અને તેથી જ આ વર્ષની હાલની સ્થિતિ આ વર્ષના ઉત્પાદનમાં દેખાતી નથી.',
+      summaryWord: '{region}: ઉત્પાદન {trend}, {catchChange}, CPUE {cpueChange}, મુખ્યત્વે {driver} દ્વારા નિર્ધારિત.',
+      effortChangeWord: 'પ્રયત્નમાં ફેરફાર',
+      changeUpWord: 'વધ્યું',
+      changeDownWord: 'ઘટ્યું',
+      changeFlatWord: 'સપાટ',
+      landingTrendWord: 'ઉત્પાદન વલણ',
+      driverWord: 'કારક',
+      recommendChlWord: '{region} માટે સૌથી મજબૂત સૂચક Chl-a છે. પરંપરાગત માછલી પકડના વિસ્તારો બદલે ઉપગ્રહથી મળતા ક્લોરોફિલ સીમાઓ તરફ મહેન ખસેડો, જે મહેનને નષ્ટ થતા ક્ષેતરથી અલગ કરે છે.',
+      recommendSstWord: 'તાપમાન બંધારણ જ અસરકારક પરિબંધ છે. માછલી વાહકોને ઠંડા ઋતુની વ્યાપક સમયમાં ખસેડો અને જ્યાં થર્મોક્લાઇન ઉપર આવ્યો છે તે સંકુચિત ગરમ પાણીના પટ્ટાથી બચો.',
+      recommendCpueDropWord: 'CPUE {percent}% ઘટ્યો છે, તેથી આ સાચો ઉત્પાદન નુકસાન છે, ફક્ત મહેનનું વિલય નથી. વાહકોને ફરી મોકલવાને બદલે મૌસમી બંધી અથવા મહેન મર્યાદા વિશે વિચારો.',
+      recommendCpueHoldingWord: 'CPUE મોટાભાગમાં સ્થિર છે, તેથી વધુ સારા દરિયાકીય વિજ્ઞાન તરફ વાહકોને લઈ જવાથી બંધી કરતાં ઉત્પાદન વધુ ઝડપથી સુધરશે.',
+      recommendNextSeasonWord: '{label} લગભગ {lag} મહિના પહેલાં ઉત્પાદનનું નેતૃત્વ કરે છે. આગલા ઋતુનો પ્રયાસ નક્કી કરવા આ ઋતુનો {label} લો, ગયા ઋતુના લણણિયા નહીં.',
+      recommendAssessWord: 'બંધીના કોઈપણ નિર્ણય પહેલાં સ્વતંત્ર માછલી સંપત્તિ મૂલ્યાંકન કરાવો: આ સહસંબંધો વાતાવરણનું નિદાન છે, સંપત્તિ સ્થિતિનો પુરાવો નથી.',
 
       selectedCorridorWord: 'પસંદ કરેલ કોરિડોર',
       viewOnMapWord: 'નકશા પર જુઓ →',
@@ -2600,6 +2975,14 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
     seaStates: ['ಶಾಂತ', 'ಸಣ್ಣ ಅಲೆ', 'ನಿವಿತ', 'ಹಗುರ', 'ಮಧ್ಯಮ', 'ಅಸ್ಮಳ', 'ತೀವ್ರ ಅಸ್ಮಳ', 'ಎತ್ತರ', 'ಅತ್ಯಂತ ಎತ್ತರ'],
     riskWords: ['ಕಡಿಮೆ', 'ಮಧ್ಯಮ', 'ಹೆಚ್ಚು', 'ತೀವ್ರ'],
     trendWords: ['ಹೆಚ್ಚಿದ', 'ಸ್ಥಿರ', 'ಕಡಿಮೆಯಾಗಿದೆ'],
+    vesselProfiles: {
+      country_boat: { label: "ದೇಶದ ದೋಣಿ / ಸರ್ಫ್ ಕೆನೋ (≤ 6 ಮೀ., ಯಂತ್ರವಿಲ್ಲದ)", note: "ಹವಾಮಾನದ ಅತಿ ಸಂವೇದನಶೀಲ. ಯಾವುದೇ ORANGE ಎಚ್ಚರಿಕೆ ಇದ್ದರೆ ಕರದ ಬಾಗಿಲೇ ಇರಿ." },
+      motorized_dinghy: { label: "ಮೋಟಾರ್ ಡಿಂಗಿ / FRP ದೋಣಿ (6-10 ಮೀ.)", note: "ಪ್ರಮಾಣ ವಿನ್ಯಾಸ. ಅತ್ಯಂತ ಹತ್ತಿರದ ಸುರಕ್ಷಿತ ಆಶ್ರಯದವರೆಗೆ ಪರಾಗುವ ಮಾರ್ಗ ಇಟ್ಟುಬಿಡಿ." },
+      gillnetter: { label: "ಗಿಲ್‌ನೆಟರ್ (10-14 ಮೀ.)", note: "ಅಲೆಯ ಅವಧಿ ಕಡಿಮೆ ಇದ್ದರೆ 2.5 ಮೀ. ಅಲೆಗಳಲ್ಲಿ ಅಂಶವಾಗಿ ಕೆಲಸ ಮಾಡಬಹುದು." },
+      trawler: { label: "ಟ್ರಾಲರ್ (15-20 ಮೀ., ಯಂತ್ರವಿಲ್ಲದವರಲ್ಲಿ ಯಂತ್ರದ)", note: "ಮಧ್ಯಮ ಕಠಿಣ ಸಮುದ್ರದಲ್ಲಿ ಸ್ಥಿರ. ಗಾಳಿಮಾರು ಅಲೆಗಳನ್ನು ದಾಟಬೇಡಿ." },
+      purse_seiner: { label: "ಪರ್ಸ್ ಸೀನರ್ (20 ಮೀ.ಕ್ಕಿಂತ ಹೆಚ್ಚು)", note: "ದುರ್ಬಲವಾಗುತ್ತಿರುವ ಗಾಳಿಮಾರಿನಿಂದ ತಪ್ಪಿಸಿಕೊಳ್ಳಲು ಸಾಕಷ್ಟು ವೇಗ. ಬಲೆ ಹಾಕುವ ಸಮಯವನ್ನು ಗಮನಿಸಿ." },
+      deep_sea_trawler: { label: "ಆಳಕ್ಕೆ ಸಮುದ್ರದ ಟ್ರಾಲರ್ (25 ಮೀ.ಕ್ಕಿಂತ ಹೆಚ್ಚು)", note: "ಉತ್ತರ ಸಮುದ್ರದ ಮತ್ತು ವೇಜ್ ಬ್ಯಾಂಕ್ ಪ್ರದೇಶಗಳಿಗೆ ORCA ನಿರ್ನಿರ್ಧಿಸಿದ ಏಕೈಕ ವಿನ್ಯಾಸ." },
+    },
     productivityWords: ['ಉತ್ತಮ', 'ಚೆನ್ನ', 'ಸರಾಸರಿ', 'ಕೆಟ್ಟ'],
     horizon: ['ಈಗ', 'ಇಂದು', 'ನಾಳೆ', 'ಮುಂದಿನ 3 ದಿನಗಳಿಗೆ', 'ಈ ವಾರದಲ್ಲಿ'],
     ui: {
@@ -2712,6 +3095,60 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       validUntilWord: '{date} ವರೆಗೆ ಮಾನ್ಯ',
       severityMatrixWord: 'ಸೂಚನೆ ತೀವ್ರತೆ ಮ್ಯಾಟ್ರಿಕ್ಸ್',
       disasterQuestionsWord: 'ವಿಪತ್ತು ನಿರ್ವಹಣೆ ಪ್ರಶ್ನೆಗಳು',
+      dominantDriverWord: 'ಪ್ರಮುಖ ಸಾಂಖ್ಯಿಕ ಕಾರಕ {label} (r = {r}).',
+      secondDriverWord: '{label} r = {r} ಜೊತೆ ಹಿಂದಿದೆ.',
+      effortDilutionWord: 'ಪ್ರಯತ್ನ ಉತ್ಪಾದನೆಗಿಂತ ವೇಗವಾಗಿ ಹೆಚ್ಚಿದೆ, ಹಾಗಾಗಿ ಕಡಿಮೆಯಲ್ಲಿ ಒಂದು ಭಾಗ ನಿಜಾಯ ದಾಸ್ತಾನ ನಷ್ಟದ ಬದಲು ಪ್ರಯತ್ನ ತುದುಬಣಿಕೆಯಾಗಿದೆ.',
+      realSignalWord: 'ಪ್ರಯತ್ನ ಈ ಬದಲಾವಣೆಗೆ ವಿವರಣೆ ನೀಡುವುದಿಲ್ಲ, ಹಾಗಾಗಿ ಇದು ನಿಜವಾದ ಉತ್ಪಾದಕತೆಯ ಸೂಚನೆ, ಪ್ರಯತ್ನ ತುದುಬಣಿಕೆಯಲ್ಲ.',
+      veryStrongWord: 'ತುಂಬಾ ಬಲವಾದ',
+      strongWord: 'ಬಲವಾದ',
+      moderateWord: 'ಮಧ್ಯಮ',
+      weakWord: 'ದುರ್ಬಲ',
+      negligibleWord: 'ಅತಿ ಸಣ್ಣ',
+      advisoriesInForceWord: '{harbor} ಗಾಗಿ {n} {count} ಜಾರಿಯಲ್ಲಿದೆ ಅಥವಾ ಸಮીಪದಲ್ಲಿದೆ.',
+      advisoryIsWord: 'ಎಚ್ಚರಿಕೆಯಿದೆ',
+      advisoriesAreWord: 'ಎಚ್ಚರಿಕೆಗಳಿವೆ',
+      highestIsWord: 'ಅತ್ಯಂತ ತೀವ್ರವಾದ {level} {type}: {title}.',
+      noWarningInForceWord: 'ಪ್ರಸ್ತುತ ಚಕ್ರದಲ್ಲಿ {harbor} ಗಾಗಿ IMD ಅಥವಾ INCOIS ಸಮುದ್ರ ಎಚ್ಚರಿಕೆ ಇಲ್ಲ. ಇದು ಬುಲೆಟಿನ್ ಬಗ್ಗೆ ಹೇಳುವುದು; ಪರಿಸ್ಥಿತಿಯ ಖಾತರಿಯಲ್ಲ.',
+      lapsedWord: '{title} — {harbor} ನಲ್ಲಿನ {level} {type} {date} ರಂದು ಮುಗಿದಿದೆ ಮತ್ತು ಈಗ ಈ ಚಕ್ರದಲ್ಲಿ ಅಮಲದಲ್ಲಿದೆ.',
+      computedFromLiveWord: 'ಇದು ಲೈವ್ ಮುನ್ಸೂಚನೆ ಸರಣಿಯಿಂದ ಲೆಕ್ಕಹಾದಲ್ಲಿದೆ.',
+      computedFromReferenceWord: 'ಇದು ಉಲ್ಲೇಖ ಮುನ್ಸೂಚನೆ ಸರಣಿಯಿಂದ ಲೆಕ್ಕಹಾದಲ್ಲಿದೆ; ಈ ಬಾರಿ ಲೈವ್ ಡೇಟಾ ಲಭ್ಯವಿರಲಿಲ್ಲ.',
+      weakLinkWord: 'ಈ ಸಂಬಂಧವು ಕ್ರಮಕ್ಕೆ ತುಂಬಾ ದುರ್ಬಲವಾಗಿದೆ.',
+      positiveLinkWord: 'ಒಂದು ಸಕಾರಾತ್ಮಕ',
+      negativeLinkWord: 'ಒಂದು ನಕಾರಾತ್ಮಕ',
+      notWorthActingWord: 'ಇಲ್ಲ',
+      worthActingFirstWord: 'ಈ ಅಂಶದ ಮೇಲೆ ಮೊದಲು ಕ್ರಮ ಕೈಗೊಳ್ಳುವುದು ಸೂಕ್ತ',
+      greatCircleStyleWord: 'ನೇರವಾದ ಗ್ರೇಟ್-ಸರ್ಕಲ್ ಮಾರ್ಗ',
+      starboardStyleWord: 'ಸ್ಟಾರ್ಬೋರ್ಡ್ ಆಫ್‌ಸೆಟ್ ಕಾರಿಡರ್',
+      inshoreStyleWord: 'ಆಶ್ರಯಕ್ಕಾಗಿ ಒಳಸರದ ಕಾರಿಡರ್',
+      routeLowWord: '{style} ಶಿಫಾರಸು ಮಾಡಲಾಗಿದೆ: {km} km, ಸುರಕ್ಷತೆ {score}/100, ಪ್ರತಿ ಅಪಾಯ ವಲಯದಿಂದ ಮುಕ್ತ.',
+      routeModerateWord: '{style} ಪರೀಕ್ಷಿಸಿದ ಆಯ್ಕೆಗಳಲ್ಲಿ ಅತ್ಯುತ್ತಮ, ಆದರೆ ಪರಿಸ್ಥಿತಿ ಅಂಚಿನಲ್ಲಿದೆ: ಸಮುದ್ರ {wave} m ವರೆಗೆ, ಗಾಳಿ {wind} kt.',
+      routeHighWord: '{style} ಇನ್ನೂ {score}/100 ನೀಡುತ್ತದೆ, ಆದರೆ ಈ ದೋಣಿಗೆ ಯಾವುದೇ ಕಾರಿಡರ್ ಆರಾಮದಾಯಕವಲ್ಲ. ಪ್ರಯಾಣವನ್ನು ಅಸುರಕ್ಷಿತ ಎಂದು ಪರಿಗಣಿಸಿ ಮುಂದಿನ ಬುಲೆಟಿನ್ ನಂತರ ಮತ್ತೆ ಪರಿಶೀಲಿಸಿ.',
+      corridorSummaryWord: '{from} ರಿಂದ {to} ವರೆಗಿನ ಅತ್ಯಂತ ಸುರಕ್ಷಿತ ಕಾರಿಡರ್ {km} km, ಸುಮಾರು {eta}, {speed} kt ನಲ್ಲಿ. ಸುರಕ್ಷತಾ ಅಂಕ {score}/100, ಒಟ್ಟು ಮೌಲ್ಯಮಾಪನ {risk}.',
+      atWord: 'ನಲ್ಲಿ',
+      fromWord: 'ಇಂದ',
+      correlationLabelChlorophyll: 'ಕ್ಲೋರೋಫಿಲ್-ಎ',
+      correlationLabelSst: 'ಸಮುದ್ರ ಮೇಲ್ಮೈನ ಉಷ್ಣತೆ',
+      correlationLabelEffort: 'ಮೀನು ಹಿಡಿಯುವ ಪ್ರಯತ್ನ',
+      correlationLabelRainfall: 'ಮಳೆ',
+      correlationDirectionUp: 'ಇದರ ಪ್ರಮಾಣ ಹೆಚ್ಚಿದರೆ ಉತ್ಪಾದನೆಯೂ ಹೆಚ್ಚುತ್ತದೆ',
+      correlationDirectionDown: 'ಇದರ ಪ್ರಮಾಣ ಹೆಚ್ಚಿದರೆ ಉತ್ಪಾದನೆ ಕಡಿಮೆಯಾಗುತ್ತದೆ',
+      correlationVerdictWord: '{label} ಮತ್ತು ಉತ್ಪಾದನೆ: {months} ತಿಂಗಳಲ್ಲಿ r = {r}{lagClause}.',
+      lagClauseWord: ', {lag} ತಿಂಗಳ ವಿಳಂಬದಲ್ಲಿ ಅತ್ಯುತ್ತಮ (r = {lagR})',
+      trendWindowWord: '{months} ತಿಂಗಳಲ್ಲಿ ({start} ರಿಂದ {end} ರವರೆಗೆ), {region} ಮೀನುಗಾರಿಕೆಯಲ್ಲಿ ಉತ್ಪಾದನೆ {trend}, {catchChange}. CPUE {cpue} ಟನ್ ಪ್ರತಿ 1000 ದೋ-ದಿನ, ಈ ಅವಧಿಯಲ್ಲಿ {cpueChange}.',
+      lagLeaderWord: '{label} ಸುಮಾರು {lag} ತಿಂಗಳ ಮೊದಲೇ ಉತ್ಪಾದನೆಗೆ ಮುಂದಾಗುತ್ತದೆ (ವಿಳಂಬಿತ r = {lagR} ಹೋಲಿಸಿ ಸಮವರ್ತಮಾದ r = {r}). ಸಮುದ್ರದ ಪ್ರತಿಕ್ರಿಯೆ ಮತ್ತು ಮೀನುಗಾರಿಕೆಯಿಂದ ನಡುವಿನ ಈ ಭೌತಿಕ ವಿಳಂಬವೇ ಇದು, ಮತ್ತು ಹಾಗಾಗಿ ಈ ವರ್ಷದ ಪ್ರಸ್ಥಿತಿಯು ಈ ವರ್ಷದ ಉತ್ಪಾದನೆಯಲ್ಲಿ ಕಾಣುತ್ತದೆ.',
+      summaryWord: '{region}: ಉತ್ಪಾದನೆ {trend}, {catchChange}, CPUE {cpueChange}, ಮುಖ್ಯವಾಗಿ {driver} ನಿಂದ ನಿರ್ಧರಿತ.',
+      effortChangeWord: 'ಪ್ರಯತ್ನದಲ್ಲಿ ಬದಲಾವಣೆ',
+      changeUpWord: 'ಹೆಚ್ಚಿದೆ',
+      changeDownWord: 'ಕಡಿಮೆಯಾಗಿದೆ',
+      changeFlatWord: 'ಸ್ಥಿರ',
+      landingTrendWord: 'ಉತ್ಪಾದನೆ ಪ್ರವೃತ್ತಿ',
+      driverWord: 'ಕಾರಣ',
+      recommendChlWord: '{region}ಗೆ ಅತಿ ಬಲವಾದ ಸೂಚಕ Chl-a. ಪರಂಪರಾತನ ಮೀನು ಹಿಡಿಯುವ ಪ್ರದೇಶಗಳ ಬದಲು ಉಪಗ್ರಹದಿಂದ ಪಡೆದ ಕ್ಲೋರೋಫಿಲ್ ಮುಂಚೆಗಳಿಗೆ ಹಾಗೂ ಪ್ರಯತ್ನ ಸ್ಥಳಾಂತರಿಸಿ, ಇದು ಪ್ರಯತ್ನವನ್ನು ಅಂಧಾಗುತ್ತಿರುವ ಕ್ಷೇತ್ರದಿಂದ ಬೇರ್ಪಡಿಸುತ್ತದೆ.',
+      recommendSstWord: 'ಉಷ್ಣತೆಯ ರಚನೆಯೇ ಸೀಮಿತ ಕಾರಕ. ಮೀನು ಸಾರಿಗಳನ್ನು ತಂಪಾದ ಋತುವಿನ ಕಾಲದಲ್ಲಿ ಸ್ಥಳಾಂತರಿಸಿ ಮತ್ತು ಥರ್ಮೋಕ್ಲೈನ್ ಮೇಲೆ ಬಂದಿರುವ ಕಿರಿದ ಬೆಚ್ಚಗಿನ ನಿರ ತಪ್ಪಿಸಿ.',
+      recommendCpueDropWord: 'CPUE {percent}% ಕಡಿಮೆಯಾಗಿದೆ, ಹಾಗಾಗಿ ಇದು ನಿಜವಾದ ಉತ್ಪಾದನಾ ನಷ್ಟ, ಕೇವಲ ಪ್ರಯತ್ನದ ಮಿಶ್ರಣ ಅಲ್ಲ. ಸಾರಿಗಳನ್ನು ಮತ್ತೆ ಬಿಡುಗಡೆ ಮಾಡುವ ಬದಲು ಋತುಮಾನಿ ಮುಚ್ಛದೆ ಅಥವಾ ಪ್ರಯತ್ನ ಮಿತಿಯನ್ನು ಪರಿಗಣಿಸಿ.',
+      recommendCpueHoldingWord: 'CPUE ಹೆಚ್ಚಾಗಿ ಸ್ಥಿರವಾಗಿದೆ, ಹಾಗಾಗಿ ಉತ್ತಮ ಸಮುದ್ರ ವಿಜ್ಞಾನದ ಕಡಮೆಗೆ ಸಾರಿಗಳನ್ನು ಸರಿಸಿದರೆ ಮುಚ್ಛದೆಗಿಂತ ಉತ್ಪಾದನೆ ಬೇಗ ಚೇರುತ್ತದೆ.',
+      recommendNextSeasonWord: '{label} ಸುಮಾರು {lag} ತಿಂಗಳ ಮೊದಲೇ ಉತ್ಪಾದನೆಗೆ ಮುಂಚಿಕೆ ನೀಡುತ್ತದೆ. ಮುಂದಿನ ಋತುವಿನ ಪ್ರಯತ್ನ ನಿರ್ಧರಿಸಲು ಈ ಋತುವಿನ {label} ಬಳಸಿ, ಕಳೆದ ಋತುವಿನ ಇಳುವರಿ ಅಲ್ಲ.',
+      recommendAssessWord: 'ಮುಚ್ಛದೆಯ ಯಾವುದೇ ನಿರ್ಧಾರದ ಮೊದಲು ಸ್ವತಂತ್ರ ಸಂಪತ್ತಿ ಮೌಲ್ಯಮಾಪನ ನಡೆಸಿ: ಈ ಸಂಬಂಧಗಳು ಪರಿಸರದ ರೋಗದ ಸೂಚನೆ, ಸಂಪತ್ತಿ ಸ್ಥಿತಿಯ ಪುರಾವು ಅಲ್ಲ.',
 
       selectedCorridorWord: 'ಆಯ್ಕೆ ಮಾಡಿದ ಕಾರಿಡಾರ್',
       viewOnMapWord: 'ನಕ್ಷೆಯಲ್ಲಿ ನೋಡಿ →',
@@ -3114,6 +3551,14 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
     seaStates: ['ശാന്തം', 'ചെറിയ തിരമാല', 'വിശകം', 'നേരിയ', 'ഇടത്തരം', 'പരുക്കൻ', 'വളരെ പരുക്കൻ', 'ഉയരം', 'വളരെ ഉയരം'],
     riskWords: ['കുറവ്', 'ഇടത്തരം', 'ഉയർന്ന', 'ഗുരുതരം'],
     trendWords: ['വളർന്നു', 'സ്ഥിരം', 'കുറഞ്ഞു'],
+    vesselProfiles: {
+      country_boat: { label: "നാട്ടു പരവാടി / സർഫ് കയോ (≤ 6 മീ., യന്ത്രമില്ലാത്ത)", note: "കാലാസാമഗ്രഹികളോട് അതിക സൻസംഘനമുള്ളത്. ORANGE മുന്നറിയിപ്പുകളുണ്ടാല് കരയിൽ നിൽക്കുക." },
+      motorized_dinghy: { label: "മോട്ടർ ഡിംഗി / FRP പരവാടി (6-10 മീ.)", note: "സ്വതവ വിന്യാസം. അടുത്ത സുരക്ഷിത ആശ്രയത്തിലേക്കുള്ള രക്ഷണ വഴി സൂക്ഷിക്കുക." },
+      gillnetter: { label: "ഗിൽനെറ്റർ (10-14 മീ.)", note: "താരതമ്യത്തിലെ കുറവാണെങ്കിൽ 2.5 മീ. താരങ്ങളിൽ അത്താടയായി ജോലി ചെയ്യാം." },
+      trawler: { label: "ട്രോളർ (15-20 മീ., യന്ത്രസഞ്ചിതം)", note: "മധ്യമ കടുത്ത കടലിൽ സ്ഥിരം. ചുമ്പയുടെ താരങ്ങൾ കടത്തിടുത്ത് വരാതിരിക്കുക." },
+      purse_seiner: { label: "പർസ് സീനർ (20 മീ.ക്കിലധികം)", note: "ദുർബലമാകുന്ന ചുമ്പ ഒളിക്കാൻ മതി. വല ഇടുന്ന സമയം ശ്രദ്ധിക്കുക." },
+      deep_sea_trawler: { label: "ആഴത്ത കടലിലെ ട്രോളർ (25 മീ.ക്കിലധികം)", note: "വടക്കൻ സമുദ്രവിഭാഗത്തിനുായി വേജ് ബാങ്ക് മേഖലകൾക്കായി ORCA റേറ്റ് ചെയ്ത ഏകൈക വിന്യാസം." },
+    },
     productivityWords: ['ഉത്തമം', 'നല്ല', 'സാധാരണ', 'കുറവ്'],
     horizon: ['ഇപ്പോൾ', 'ഇന്ന്', 'നാളെ', 'അടുത്ത 3 ദിവസത്തേക്ക്', 'ഈ ആഴ്ചയിൽ'],
     ui: {
@@ -3226,6 +3671,60 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       validUntilWord: '{date} വരെ സാധുവാണ്',
       severityMatrixWord: 'സൂചന തീവ്രത മാട്രിക്സ്',
       disasterQuestionsWord: 'ദുരന്ത നിവാരണ ചോദ്യങ്ങൾ',
+      dominantDriverWord: 'പ്രധാന സ്ഥിതിവിവരക കാരണം {label} ആണ് (r = {r}).',
+      secondDriverWord: '{label} r = {r} എന്നതിനൊപ്പം പിന്നിൽ ആണ്.',
+      effortDilutionWord: 'ശ്രമം ഉൽപ്പാദനത്തേക്കാൾ വേഗത്തിൽ വർദ്ധിച്ചിരിക്കുന്നു, അതിനാൽ കുറവുപായി ഭാഗം യഥാർത്ഥ സ്റ്റോക്ക് നഷ്ടമല്ല, ശ്രമ തിരികലാകാരമാണ്.',
+      realSignalWord: 'ശ്രമം ഈ മാറ്റത്തിന് വിശദീകരണം നൽകുന്നില്ല, അതിനാൽ ഇത് യഥാർത്ഥ ഉൽപ്പാദനശക്തിയുടെ സൂചനയാണ്, ശ്രമ തിരികലാകാരമല്ല.',
+      veryStrongWord: 'വളരെ ശക്തമായ',
+      strongWord: 'ശക്തമായ',
+      moderateWord: 'മധ്യമമായ',
+      weakWord: 'ദുർബലമായ',
+      negligibleWord: 'അല്പമായ',
+      advisoriesInForceWord: '{harbor} നിവേടിയിൽ {n} {count} നിലവിലാണെങ്കിൽ അടുത്തിരിക്കുന്നു.',
+      advisoryIsWord: 'മുന്നറിയിപ്പും ഉണ്ട്',
+      advisoriesAreWord: 'മുന്നറിയിപ്പുകളും ഉണ്ട്',
+      highestIsWord: 'ഏറ്റവും ഗുരുതരമായ {level} {type}: {title}.',
+      noWarningInForceWord: 'നിലവിലെ ചക്രത്തിൽ {harbor} നിവേടിയിൽ IMD അല്ലെങ്കിൽ INCOIS കടല്‍ ജാഗ്രതാപനം ഇല്ല. ഇത് ബുള്ളറ്റിനെപ്പറ്റിയുള്ള പ്രസ്താവനയാണ്, അവസരങ്ങളുടെ ഗ്യാരന്റിയല്ല.',
+      lapsedWord: '{title} — {harbor} നിവേടിലെ {level} {type} {date} നംസം അവസാനിച്ചു, ഇനി ഈ ചക്രത്തിൽ നിലവിലില്ല.',
+      computedFromLiveWord: 'ഇത് ലൈവ് പ്രവാഹന ശ്രേണിയിൽ നിന്നു കണക്കാക്കിയതാണ്.',
+      computedFromReferenceWord: 'ഇത് റഫറൻസ് പ്രവാഹന ശ്രേണിയിൽ നിന്നു കണക്കാക്കിയതാണ്; ഈ തവണ ലൈവ് ഡാറ്റ ലഭ്യമായിരുന്നില്ല.',
+      weakLinkWord: 'ഈ ബന്ധം പ്രവൃത്തിക്കുന്നതിന് വളരെ ദുർബലമാണ്.',
+      positiveLinkWord: 'ഒരു സകാരാത്മക',
+      negativeLinkWord: 'ഒരു നകാരാത്മക',
+      notWorthActingWord: 'ഇല്ല',
+      worthActingFirstWord: 'ഈ ഘടകത്തിൽ ആദ്യം പ്രവൃത്തിക്കുന്നതിന് യോഗ്യമാണ്',
+      greatCircleStyleWord: 'നേരമായ ഗ്രേറ്റ്-സർക്കിൾ വഴി',
+      starboardStyleWord: 'സ്റ്റാർബോർഡ് ഓഫ്‌സെറ്റ് കാരിഡർ',
+      inshoreStyleWord: 'ആശ്രയത്തിനായി ഉള്ളകടലിലുള്ള കാരിഡർ',
+      routeLowWord: '{style} ശുപാർശ ചെയ്യുന്നു: {km} km, സുരക്ഷ {score}/100, എല്ലാ അപായ മേഖലയിൽ നിന്നും മുക്തം.',
+      routeModerateWord: '{style} പരീക്ഷിച്ച മുകളല്ലി മിക്കം നല്ലതാണ്, പക്ഷേ സാഹചര്യങ്ങൾ അതിർത്തിയാണ്: കടൽ {wave} m വരെയും, കാറ്റ് {wind} kt.',
+      routeHighWord: '{style} ഇപ്പോഴും {score}/100 നൽകുന്നു, പക്ഷേ ഈ കപ്പിലുള്ള ഒരു കാരിഡറും സുഖമായില്ല. യാത്ര അസുരക്ഷിതമായി കണക്കാക്കുക, അടുത്ത ബുള്ളറ്റിന് ശേഷം വീണ്ടും പരിശോധിക്കുക.',
+      corridorSummaryWord: '{from} മുതൽ {to} വരെയുള്ള ഏറ്റവും സുരക്ഷിത കാരിഡർ {km} km, ഏകദേശം {eta}, {speed} kt വേഗത്തിൽ. സുരക്ഷാ സ്കോർ {score}/100, മൊത്ത റേറ്റിംഗ് {risk}.',
+      atWord: 'വഴി',
+      fromWord: 'നിന്ന്',
+      correlationLabelChlorophyll: 'ക്ലോറോഫിൽ-എ',
+      correlationLabelSst: 'കടലിൽപ്പറ്റിന്റെ താപനിലവാതം',
+      correlationLabelEffort: 'മീൻ പിടിക്കുന്ന ശ്രമം',
+      correlationLabelRainfall: 'മഴ',
+      correlationDirectionUp: 'ഇതിന്റെ അളവ് കൂടുമ്പോൾ ഉൽപ്പാദനവും കൂടുകിയും',
+      correlationDirectionDown: 'ഇതിന്റെ അളവ് കൂടുമ്പോൾ ഉൽപ്പാദനം കുറയും',
+      correlationVerdictWord: '{label} പരിചിതമായ ഉൽപ്പാദനം: {months} മാസഗളിൽ r = {r}{lagClause}.',
+      lagClauseWord: ', {lag} മാസം വൈകൽച്ച സമയത്ത് മികച്ചത് (r = {lagR})',
+      trendWindowWord: '{months} മാസങ്ങളിൽ ({start} മുതൽ {end} വരെ), {region} മീൻപിടുപ്പിൽ ഉൽപ്പാദനം {trend} ആണ്, {catchChange}. CPUE {cpue} ടൻ ഓരോ 1000 കപ്പുകളുടെ ദിവസത്തിനും, ഈ കാലയളവിൽ {cpueChange}.',
+      lagLeaderWord: '{label} ഏകദേശം {lag} മാസങ്ങൾ മുമ്പ് ഉൽപ്പാദനത്തിന് നേതൃത്വം നൽകുന്നു (വൈകൽച്ച r = {lagR} പക്ഷേ സമകാലീന r = {r}). കടലിന്റെ പ്രതികരണവും മീൻപിടുപ്പും തമ്മിലുള്ള ഈ ഭൗതിക വൈകൽ ആണ്, അതുകൊണ്ടാണ് ഈ വർഷത്തെ സാഹചര്യങ്ങൾ ഈ വർഷത്തെ ഉൽപ്പാദനത്തിൽ കാണപ്പെടുന്നതില്ല.',
+      summaryWord: '{region}: ഉൽപ്പാദനം {trend}, {catchChange}, CPUE {cpueChange}, പ്രധാനമായി {driver} എന്നതിനാൽ നിർണയിതം.',
+      effortChangeWord: 'ശ്രമത്തിലെ മാറ്റം',
+      changeUpWord: 'വർദ്ധിച്ചു',
+      changeDownWord: 'കുറഞ്ഞു',
+      changeFlatWord: 'സ്ഥിരം',
+      landingTrendWord: 'ഉൽപ്പാദന പ്രവാഹം',
+      driverWord: 'കാരണം',
+      recommendChlWord: '{region} നിലർക്കായിട്ടെത്തില്ലാത്ത ശക്തമായ സൂചകം Chl-a. പരമ്പരാഗത മീൻപിടുപ്പുകളിലല്ലാതെ ഉപഗ്രഹത്തിൽ നിന്നു ലഭിക്കുന്ന ക്ലോറോഫിൽ മുന്നോട്ടുകൾക്ക് ശ്രമം മാറ്റുക — ഇത് ശകലിക്കുന്ന പ്രദേശത്തിൽ നിന്ന് ശ്രമത്തെ വേർതിരിക്കും.',
+      recommendSstWord: 'താപ ഘടനയാണ് യഥാർത്ഥത്തിൽ തിരിക്കുന്ന ഘടകം. മീൻവാഹകരെ തണുത്ത കാലഘട്ടത്തിലേക്ക് മാറ്റുക, തെർമോക്ലൈൻ ഉയർന്ന ചുരുങ്ങിയ ചൂടുള്ള ജലമേഖലയിൽ നിന്ന് വിട്ട് നിൽക്കുക.',
+      recommendCpueDropWord: 'CPUE {percent}% കുറഞ്ഞു, അതിനാൽ ഇത് യഥാർത്ഥ ഉൽപ്പാദന നഷ്ടമാണ്, ശ്രമ മിശ്രണം മാത്രമല്ല. വാഹകരെ വീണ്ടും അയയ്ക്കുന്നതിനുപകരം സീസണൽ അടച്ചെടുക്കൽ അല്ലെങ്കിൽ ശ്രമ പരിധി പരിഗണിക്കണം.',
+      recommendCpueHoldingWord: 'CPUE സ്ഥിരമായി നിൽക്കുന്നു, അതിനാൽ മികച്ച സമുദ്ര ശാസ്ത്രത്തിലേക്ക് വാഹകരെ മാറ്റുന്നത് അടച്ചെടുക്കുന്നതിനേക്കാൾ ഉൽപ്പാദനം വേഗത്തിൽ പുനഃസ്ഥാപിക്കാൻ സാധ്യമാണ്.',
+      recommendNextSeasonWord: '{label} ഏകദേശം {lag} മാസം മുമ്പ് ഉൽപ്പാദനത്തിന് മുന്നോടടുന്നു. അടുത്ത സീസണിന്റെ ശ്രമം ആസൂത്രണം ചെയ്യുമ്പോൾ ഈ സീസണിന്റെ {label} ഉപയോഗിക്കുക, കഴിഞ്ഞ സീസണിന്റെ വിളവില്ല.',
+      recommendAssessWord: 'അടച്ചെടുക്കാനുള്ള ഏത് തീരുമാനത്തിനും മുമ്പ് സ്വതന്ത്ര മത്സ്യ വിഭവനം നടത്തിക്കുക: ഈ പൊരുത്തങ്ങൾ ചാരസ്ഥിതിയുടെ രോഗനിരോധമാണ്, സ്റ്റോക്ക് നിലയുടെ പുരാവാണ്.',
 
       selectedCorridorWord: 'തിരഞ്ഞെടുത്ത കോറിഡോർ',
       viewOnMapWord: 'ഭൂപടത്തിൽ കാണുക →',
@@ -3628,6 +4127,14 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
     seaStates: ['ప్రశాంతం', 'చిన్న అలలు', 'మృదువు', 'తేలిక', 'మధ్యస్థం', 'అల్పవు', 'తీవ్రం', 'ఎత్తర', 'అత్యంత ఎత్తర'],
     riskWords: ['తక్కువ', 'మధ్యస్థం', 'అధికం', 'తీవ్రం'],
     trendWords: ['పెరిగింది', 'స్థిరంగా', 'తగ్గింది'],
+    vesselProfiles: {
+      country_boat: { label: "దేశీయ పడవు / సర్ఫ్ కానో (≤ 6 మీ., యాంత్రికం కాదు)", note: "వాతావరణ ప్రతి అత్యంత సంవేదనశీల. ఏదైనా ORANGE హెచ్చరిక ఉంటే దీపకు ఉండండి." },
+      motorized_dinghy: { label: "మోటారు డింగీ / FRP పడవు (6-10 మీ.)", note: "డిఫాల్ట్ ప్రొఫైల్. సమీప సురక్షిత ఆశ్రయం వరకు తప్పించుకునే మార్గం ఉంచండి." },
+      gillnetter: { label: "గిల్‌నెట్టర్ (10-14 మీ.)", note: "తుంపర వ్యవధి తక్కువైతే 2.5 మీ. అలల్లో కొంత వరకు పనిచేయగలదు." },
+      trawler: { label: "ట్రాలర్ (15-20 మీ., యాంత్రికం)", note: "మధ్యస్థం కఠిన సముద్రంలో స్థిరంగా ఉంటుంది. తుఫాను ముందు అలలను దాటవద్దు." },
+      purse_seiner: { label: "పర్స్ సీనర్ (20 మీ. కంటే ఎక్కువ)", note: "బలహీనమవుతున్న తుఫాన నుంచి తప్పించుకోడానికి చాలా వేగవంతం. వల వేయడం సమయాన్ని గుర్తుంచుకోండి." },
+      deep_sea_trawler: { label: "లోతైన సముద్ర ట్రాలర్ (25 మీ. కంటే ఎక్కువ)", note: "ఉత్తర సముద్రం మరియు వేజ్ బ్యాంక్ ప్రాంతాల కోసం ORCA రేటింగ్ ఇచ్చిన ఏకైక ప్రొఫైల్." },
+    },
     productivityWords: ['ఉత్తమం', 'మంచిది', 'ఫర్వాలేదు', 'తక్కువ'],
     horizon: ['ఇప్పుడు', 'ఈరోజు', 'రేపు', 'వచ్చే 3 రోజులకు', 'ఈ వారం'],
     ui: {
@@ -3740,6 +4247,60 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       validUntilWord: '{date} వరకు చెల్లుతుంది',
       severityMatrixWord: 'సూచన తీవ్రత మ్యాట్రిక్స్',
       disasterQuestionsWord: 'విపత్తు నిర్వహణ ప్రశ్నలు',
+      dominantDriverWord: 'ప్రధాన సాంఖ్యిక కారకం {label} (r = {r}).',
+      secondDriverWord: '{label} r = {r} తో పాటు ఉంది.',
+      effortDilutionWord: 'శ్రమం ఉత్పత్తికంటే వేగంగా పెరిగింది, కాబట్టి తగ్గుదలలో కొంత భాగం నిజమైన స్టాక్ నష్టం కాకుండా శ్రమ త్రుతిపీడనం నుండి ఉంది.',
+      realSignalWord: 'ఈ మార్పును శ్రమం వివరించలేదు, కాబట్టి ఇది నిజమైన ఉత్పాదకత సంకేతం, శ్రమ త్రుతిపీడనం కాదు.',
+      veryStrongWord: 'చాలా బలమైన',
+      strongWord: 'బలమైన',
+      moderateWord: 'మధ్యస్థమైన',
+      weakWord: 'బలహీనమైన',
+      negligibleWord: 'చాలా తక్కువ',
+      advisoriesInForceWord: '{harbor} కోసం {n} {count} అమల్లో ఉన్నాయి లేదా సమీపంలో ఉన్నాయి.',
+      advisoryIsWord: 'హెచ్చరిక ఉంది',
+      advisoriesAreWord: 'హెచ్చరికలు ఉన్నాయి',
+      highestIsWord: 'అత్యంత తీవ్రమైన {level} {type}: {title}.',
+      noWarningInForceWord: 'ప్రస్తుత చక్రంలో {harbor} కోసం IMD లేదా INCOIS సముద్ర హెచ్చరిక ఏదీ లేదు. ఇది బులెటిన్ గురించి వచనం మాత్రమే, పరిస్థితుల గ్యారంటీ కాదు.',
+      lapsedWord: '{title} — {harbor} పై {level} {type} {date} నాడు ముగిసింది, ఇప్పుడు ఈ చక్రంలో అమల్లో లేదు.',
+      computedFromLiveWord: 'ఇది లైవ్ అంచనా శ్రేణి నుండి లెక్కించబడింది.',
+      computedFromReferenceWord: 'ఇది సూచన అంచనా శ్రేణి నుండి లెక్కించబడింది; ఈసారి లైవ్ డేటా అందుబాటులో లేదు.',
+      weakLinkWord: 'ఈ సంబంధం చర్యగా చాలా బలహీనంగా ఉంది.',
+      positiveLinkWord: 'ఒక సానుకూల',
+      negativeLinkWord: 'ఒక ప్రతికూల',
+      notWorthActingWord: 'లేదు',
+      worthActingFirstWord: 'ఈ అంశంపై ముందుగా చర్య తీసుకోవడం సముచితం',
+      greatCircleStyleWord: 'నేరువైన గ్రేట్-సర్కిల్ మార్గం',
+      starboardStyleWord: 'స్టార్‌బోర్డ్ ఆఫ్‌సెట్ కారిడార్',
+      inshoreStyleWord: 'ఆశ్రయం కోసం అంతర్దేశ కారిడార్',
+      routeLowWord: '{style} సిఫార్సు చేయబడింది: {km} km, భద్రత {score}/100, ప్రతి ప్రమాద కేండరంతో విడివిడిగా.',
+      routeModerateWord: '{style} పరీక్షించిన ఎంపికల్లో అత్యుత్తమం, కానీ పరిస్థితులు అంచులో ఉన్నాయి: సముద్రం {wave} m వరకు, గాలి {wind} kt.',
+      routeHighWord: '{style} ఇప్పటికీ {score}/100 ఇస్తోంది, కానీ ఈ పథకానికి ఏ కారిడార్ అనుకూలమైనదో లేదు. ప్రయాణాన్ని అసురక్షితంగా భావించండి మరియు తదుపరి బులెటిన్ తర్వాత మళ్లీ తనిఖీ చేయండి.',
+      corridorSummaryWord: '{from} నుండి {to} వరకు అత్యంత సురక్షిత కారిడార్ {km} km, సుమారు {eta}, {speed} kt వద్ద. భద్రతా స్కోరు {score}/100, మొత్తం రేటింగ్ {risk}.',
+      atWord: 'వద్ద',
+      fromWord: 'నుండి',
+      correlationLabelChlorophyll: 'క్లోరోఫిల్-ఏ',
+      correlationLabelSst: 'సముద్ర ఉపరితల ఉష్ణోగ్రత',
+      correlationLabelEffort: 'రెండు వేసే ప్రయత్నం',
+      correlationLabelRainfall: 'వర్షం',
+      correlationDirectionUp: 'దీని పరిమాణం పెరిగితే ఉత్పత్తి కూడా పెరుగుతుంది',
+      correlationDirectionDown: 'దీని పరిమాణం పెరిగితే ఉత్పత్తి తగ్గుతుంది',
+      correlationVerdictWord: '{label} మరియు ఉత్పత్తి: {months} నెలల్లో r = {r}{lagClause}.',
+      lagClauseWord: ', {lag} నెలల తరువాత అత్యుత్తమం (r = {lagR})',
+      trendWindowWord: '{months} నెలల్లో ({start} నుంచి {end} వరకు), {region} మత్స్య దార్పమంలో ఉత్పత్తి {trend}, {catchChange}. CPUE 1000 నౌక రోజులకు {cpue} టన్, ఈ వ్యవధిలో {cpueChange}.',
+      lagLeaderWord: '{label} సుమారు {lag} నెలల ముందే ఉత్పత్తికి దారిదీస్తుంది (విలంబిత r = {lagR} నిరంతర r = {r} పోలిస్తే). సముద్ర స్పందన మరియు మత్స్య దార్పమం మధ్య ఉన్న ఈ భౌతిక ఆలస్యమే ఇది, అందుకే ఈ సంవత్సర పరిస్థితులు ఈ సంవత్సర ఉత్పత్తిలో కనిపించవు.',
+      summaryWord: '{region}: ఉత్పత్తి {trend}, {catchChange}, CPUE {cpueChange}, ప్రధానంగా {driver} చేత నిర్ణయించబడింది.',
+      effortChangeWord: 'ప్రయత్నంలో మార్పు',
+      changeUpWord: 'పెరిగింది',
+      changeDownWord: 'తగ్గింది',
+      changeFlatWord: 'స్థిరంగా',
+      landingTrendWord: 'ఉత్పత్తి ప్రవృత్తి',
+      driverWord: 'కారకం',
+      recommendChlWord: '{region} కోసం అత్యంత బలమైన సూచకం Chl-a. ప్రయత్నాన్ని సాంప్రదాయ మత్స్య ప్రాంతాలకు బదులు ఉపగ్రహం నుంచి పొందిన క్లోరోఫిల్ ముందుగడులపై మళ్లించండి — ఇది క్షీణిస్తున్న ప్రాంతం నుంచి ప్రయత్నాన్ని వేరు చేస్తుంది.',
+      recommendSstWord: 'ఉష్ణోగ్రత నిర్మాణమే అడ్డంకి. మత్స్య దార్పాలను చల్లని సీజన్ కాలంలోకి మళ్లించి, థర్మోక్లైన్ పైకి ఎక్కిన సంకుచిత ఉష్ణ జల పట్టబంధాన్ని నివారించండి.',
+      recommendCpueDropWord: 'CPUE {percent}% తగ్గింది, కాబట్టి ఇది నిజమైన ఉత్పత్తి నష్టం, కేవలం ప్రయత్న మిశ్రమం కాదు. దార్పాలను మళ్లీ పంపే బదులు సీజన్ లోదు లేదా ప్రయత్న పరిమితిని పరిగణించాలి.',
+      recommendCpueHoldingWord: 'CPUE స్థిరంగా ఉంది, కాబట్టి మెరుగైన సముద్ర శాస్త్రం వైపు దార్పాలను మళ్లించడం మూసివేయడం కంటే వేగంగా ఉత్పత్తిని పునరుద్ధరిస్తుంది.',
+      recommendNextSeasonWord: '{label} సుమారు {lag} నెలల ముందే ఉత్పత్తికి దారిదీస్తుంది. తదుపరి సీజన్ ప్రయత్నాన్ని నిర్ణయించడానికి ఈ సీజన్‌లోని {label} ఉపయోగించండి, గత సీజన్ చేపట్లో కాదు.',
+      recommendAssessWord: 'మూసివేయడం నిర్ణయానికి ముందు స్వతంత్ర మత్స్య స్టాక్ మూల్యాంకనం నిర్వహించండి: ఈ పరస్పర సంబంధాలు పరిసరాల స్థితికి సూచికలు, స్టాక్ స్థితికి ఆధారం కావు.',
 
       selectedCorridorWord: 'ఎంచుకున్న కారిడార్',
       viewOnMapWord: 'పటంలో చూడండి →',
@@ -4142,6 +4703,14 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
     seaStates: ['அமைதி', 'சிறிய அலை', 'மென்மையான', 'மெல்லிய', 'நடுத்தரம்', 'சுரப்பான', 'மிகவும் சுரப்பான', 'உயர்ந்த', 'மிக உயர்ந்த'],
     riskWords: ['குறைவு', 'நடுத்தரம்', 'அதிகம்', 'தீவிரம்'],
     trendWords: ['அதிகரித்துள்ளது', 'நிலையானது', 'குறைந்துள்ளது'],
+    vesselProfiles: {
+      country_boat: { label: "நாட்டு படவு / சர்ப் கயனோ (≤ 6 மீ., இயந்திரமற்றது)", note: "வானிலை மிகவும் உணர்திறன் கொண்டது. எந்த ORANGE எச்சரிக்கையும் இருந்தால் கரையில் இருங்கள்." },
+      motorized_dinghy: { label: "மோட்டார் டிங்கி / FRP படவு (6-10 மீ.)", note: "இயல்பான தேர்வு. அருகிலுள்ள பாதுகாப்பான துவையம் வரை தப்பிச்செல்லும் வழியை வையத்திருங்கள்." },
+      gillnetter: { label: "கில்னெட்டர் (10-14 மீ.)", note: "அலை காலம் குறைந்திருந்தால் 2.5 மீ. அலைகளில் குறைந்தளவு பணியாற முடியும்." },
+      trawler: { label: "ட்ராலர் (15-20 மீ., இயந்திரப் படவு)", note: "மிதமான கடல் சாக்கில் நிலையானது. புயலின் முன்னால் அலைகளைக் கடக்காதீர்கள்." },
+      purse_seiner: { label: "பர்ச் சீனர் (20 மீ.க்கு மேல்)", note: "பலவிதமாகும் புயலைத் தவிர்க்கக்கூடிய வேகம். வலை வித்தற்காலத்தைக் கவனிக்கவும்." },
+      deep_sea_trawler: { label: "ஆழ்கடல் ட்ராலர் (25 மீ.க்கு மேல்)", note: "வட கடல் மற்றும் வேஜ் வங்கி மீன்புடைப் பகுதிகளுக்கு ORCA மதிப்பிடும் ஒரே சுயவகை." },
+    },
     productivityWords: ['சிறந்தது', 'நல்லது', 'சராசரி', 'குறைவு'],
     horizon: ['இப்போது', 'இன்று', 'நாளை', 'வரும் 3 நாட்களுக்கு', 'இந்த வாரம்'],
     ui: {
@@ -4254,6 +4823,60 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       validUntilWord: '{date} வரை செல்லுபடியாகும்',
       severityMatrixWord: 'ஆலோசனை தீவிரம் அணிவரிசை',
       disasterQuestionsWord: 'பேரிடர் மேலாண்மை கேள்விகள்',
+      dominantDriverWord: 'முக்கிய புள்ளிச் சார்பி {label} (r = {r}).',
+      secondDriverWord: '{label} r = {r} உடன் பின்வருகிறது.',
+      effortDilutionWord: 'முயற்சி உற்பத்தியை விட வேகமாக உயர்ந்துள்ளது, எனவே குறைவின் ஒரு பகுதி உண்மையான கையிருப்பு இழப்பு அல்ல, முயற்சி நீர்த்தலாகும்.',
+      realSignalWord: 'முயற்சி இந்த மாற்றத்தை விளக்க முடியவில்லை, எனவே இது உண்மையான உற்பத்தித் திறன் அறிகுறியாகும், முயற்சி நீர்த்தல் அல்ல.',
+      veryStrongWord: 'மிகவும் வலுவான',
+      strongWord: 'வலுவான',
+      moderateWord: 'மிதமான',
+      weakWord: 'பலவீனமான',
+      negligibleWord: 'மிகச் சிறிய',
+      advisoriesInForceWord: '{harbor} க்கு {n} {count} அமலில் உள்ளன அல்லது அருகில் உள்ளன.',
+      advisoryIsWord: 'எச்சரிக்கை உள்ளது',
+      advisoriesAreWord: 'எச்சரிக்கைகள் உள்ளன',
+      highestIsWord: 'மிகவும் தீவிரமான {level} {type}: {title}.',
+      noWarningInForceWord: 'தற்போதைய சுழற்சியில் {harbor} க்கு IMD அல்லது INCOIS கடல் எச்சரிக்கை எதுவும் இல்லை. இது அறிவிப்பைப் பற்றிய கூற்று; நிலைமைகளின் உறுதிப்பு அல்ல.',
+      lapsedWord: '{title} — {harbor} பகுதியில் {level} {type} {date} அன்று முடிந்தது, இப்போது இச்சுழற்சியில் அமலில் இல்லை.',
+      computedFromLiveWord: 'இது நேரடி முன்னறிவிப்புத் தொடரிலிருந்து கணக்கிடப்பட்டது.',
+      computedFromReferenceWord: 'இது குறிப்பிட்ட முன்னறிவிப்புத் தொடரிலிருந்து கணக்கிடப்பட்டது; இந்தச் சுழற்சியில் நேரடி தரவு கிடைக்கவில்லை.',
+      weakLinkWord: 'இந்தத் தொடர்பு செயல்படுத்துவதற்கு மிகவும் பலவீனமானது.',
+      positiveLinkWord: 'ஒரு நேர்மறை',
+      negativeLinkWord: 'ஒரு எதிர்மறை',
+      notWorthActingWord: 'இல்லை',
+      worthActingFirstWord: 'இந்தக் காரணியில் முதலில் செயல்படுவது பயனுள்ளது',
+      greatCircleStyleWord: 'நேரடி பெருவட்ட வழி',
+      starboardStyleWord: 'ஸ்டார்போர்ட் ஆஃப்செட் பாதை',
+      inshoreStyleWord: 'அடைவு நோக்கிய உட்பாதை',
+      routeLowWord: '{style} பரிந்துரைக்கப்படுகிறது: {km} km, பாதுகாப்பு {score}/100, ஒவ்வொரு ஆபத்து பகுதியிலிருந்தும் சுதந்தமானது.',
+      routeModerateWord: '{style} சோதிக்கப்பட்ட தெரிவுகளில் சிறந்தது, ஆனால் சூழல் எல்லை நிலையில் உள்ளது: கடல் {wave} m வரை, காற்று {wind} kt.',
+      routeHighWord: '{style} இன்னும் {score}/100 அளிக்கிறது, ஆனால் இந்தக் கப்பலுக்கு எந்தப் பாதையும் சாதகமானதல்ல. பயணத்தைப் பாதுகாப்பற்றதாகக் கருதுங்கள், அடுத்த அறிவிப்புக்குப் பிறகு மீண்டும் சரிபார்க்கவும்.',
+      corridorSummaryWord: '{from} முதல் {to} வரை மிகப் பாதுகாப்பான பாதை {km} km, சுமார் {eta}, {speed} kt வேகத்தில். பாதுகாப்பு மதிப்பெண் {score}/100, மொத்த மதிப்பீடு {risk}.',
+      atWord: 'இல்',
+      fromWord: 'இருந்து',
+      correlationLabelChlorophyll: 'குளோரோபில்-ஏ',
+      correlationLabelSst: 'கடல் மேற்பரப்பு வெப்பநிலை',
+      correlationLabelEffort: 'மீன் பிடிப்பு முயற்சி',
+      correlationLabelRainfall: 'மழை',
+      correlationDirectionUp: 'அதன் அளவு அதிகரிக்கும்போது உற்பத்தியும் அதிகரிக்கும்',
+      correlationDirectionDown: 'அதன் அளவு அதிகரிக்கும்போது உற்பத்தி குறையும்',
+      correlationVerdictWord: '{label} மற்றும் உற்பத்தி: {months} மாதங்களில் r = {r}{lagClause}.',
+      lagClauseWord: ', {lag} மாத தாமதத்தில் சிறந்தது (r = {lagR})',
+      trendWindowWord: '{months} மாதங்களில் ({start} முதல் {end} வரை), {region} மீன்புடைப் பகுதியில் உற்பத்தி {trend}, {catchChange}. 1000 படவு-நாட்களுக்கு CPUE {cpue} டன், இந்தக் காலளவில் {cpueChange}.',
+      lagLeaderWord: '{label} சுமார் {lag} மாதங்கள் முன்பே உற்பத்திக்கு வழிநடத்துகிறது (தாமத r = {lagR} ஒப்பிடுகையில் தற்போதைய r = {r}). கடலின் தாக்கத்திற்கும் மீன்புடைக்கும் இடையிலான இந்த இயல்பு தாமதமே இதுவே, எனவே இந்த ஆண்டின் நிலைமைகள் இந்த ஆண்டின் உற்பத்தியில் தெரியவில்லை.',
+      summaryWord: '{region}: உற்பத்தி {trend}, {catchChange}, CPUE {cpueChange}, முதன்மையாக {driver} காரணமாக.',
+      effortChangeWord: 'முயற்சி மாற்றம்',
+      changeUpWord: 'அதிகரித்து',
+      changeDownWord: 'குறைந்து',
+      changeFlatWord: 'மாற்றமின்றி',
+      landingTrendWord: 'உற்பத்தி போக்கு',
+      driverWord: 'காரணி',
+      recommendChlWord: '{region}க்கு மிகவும் வலுவான குறியீடு Chl-a. முயற்சியை பாரம்பரிய மீன்புடைப் பகுதிகளுக்குப் பதிலாக வானூர்தி தரவிலிருந்து கிடைக்கும் குளோரோபில் முன்னோட்டங்களுக்கு மாற்றுங்கள் — இது முயற்சியை சிதைந்து வரும் பகுதியிலிருந்து பிரிக்கிறது.',
+      recommendSstWord: 'வெப்ப அமைப்பே தடைபடுத்தும் காரணி. மீன் வாகன்களை குளிர் காலத்தின் சாளத்திற்கு மாற்றுங்கள், தெர்மோகிளைன் மேலே ஏறிய சுருங்கிய வெப்ப நீர்ப் பட்டையைத் தவிர்க்கவும்.',
+      recommendCpueDropWord: 'CPUE {percent}% குறைந்துள்ளது, எனவே இது உண்மையான உற்பத்தி இழப்பு, முயற்சி கலப்பு மட்டுமல்ல. வாகன்களை மீண்டும் அனுப்புவதற்குப் பதிலாக பருவகால மூடல் அல்லது முயற்சி வரம்பைக் கவையுங்கள்.',
+      recommendCpueHoldingWord: 'CPUE பெருமளவில் நிலையாக உள்ளது, எனவே சிறந்த கடல்ச்சcience திசைக்கு வாகன்களை மாற்றுவது மூடலை விட உற்பத்தியை விரைவில் மீட்டெடுக்கும்.',
+      recommendNextSeasonWord: '{label} சுமார் {lag} மாதங்கள் முன்பே உற்பத்திக்கு வழிநடத்துகிறது. அடுத்த பருவ முயற்சியைத் தீர்மானிக்க இந்தப் பருவத்தின் {label} ஐப் பயன்படுத்துங்கள், கடந்த பருவத்தின் இறையை அல்ல.',
+      recommendAssessWord: 'மூடல் முடிவுக்கு முன் சுயேச்சையான மீன் இருப்பு மதிப்பீட்டை நடத்தவும்: இந்த சார்புகள் சூழலின் அறிகுறிச்சான்று, இருப்பு நிலையின் ஆதாரம் அல்ல.',
 
       selectedCorridorWord: 'தேர்ந்தெடுத்த நடைபாதை',
       viewOnMapWord: 'வரைபடத்தில் காண்க →',
@@ -4657,6 +5280,14 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
     seaStates: ['শান্ত', 'ছোট ঢেউ', 'মসৃণ', 'হালকা', 'মাঝারি', 'খোলসা', 'খুব খোলসা', 'উচ্চ', 'অত্যন্ত উচ্চ'],
     riskWords: ['কম', 'মাঝারি', 'উচ্চ', 'গুরুতর'],
     trendWords: ['বৃদ্ধি', 'স্থির', 'হ্রাস'],
+    vesselProfiles: {
+      country_boat: { label: "দেশি নৌকা / সার্ফ ক্যানো (≤ ৬ মিটার, ইঞ্জিনবিহীন)", note: "আবহাওয়ার প্রতি অত্যন্ত সংবেদনশীল। যেকোনো ORANGE সতর্কতা থাকলে তীরে থাকুন।" },
+      motorized_dinghy: { label: "মোটরচালিত ডিঙ্গি / FRP নৌকা (6-10 মিটার)", note: "ডিফল্ট প্রোফাইল। কাছাকাছি নিরাপদ আশ্রয় পর্যন্ত পালানোর পথ রাখুন।" },
+      gillnetter: { label: "গিলনেটার (10-14 মিটার)", note: "ঢেউয়ের সময়কাল ছোট হলে ২.৫ মিটার ঢেউয়ে সীমানাহীনভাবে কাজ করতে পারে।" },
+      trawler: { label: "ট্রলার (15-20 মিটার, ইঞ্জিনচালিত)", note: "মাঝারি খারাপ সমুদ্রে স্থিতিশীল। ঝড়ের সামনের ঢেউ পেরিয়ে যাবেন না।" },
+      purse_seiner: { label: "পার্স সিনার (20 মিটারের বেশি)", note: "দুর্বল হয়ে পড়ছে এমন ঝড় থেকে পালাতে যথেষ্ট দ্রুত। জাল বসানোর সময় খেয়াল রাখুন।" },
+      deep_sea_trawler: { label: "গভীর সমুদ্রের ট্রলার (25 মিটারের বেশি)", note: "উত্তর সমুদ্র ও ওয়েজ ব্যাংক এলাকার জন্য ORCA-র রেট করা একমাত্র প্রোফাইল।" },
+    },
     productivityWords: ['চমৎকার', 'ভালো', 'মোটামুটি', 'কম'],
     horizon: ['এখন', 'আজ', 'আগামীকাল', 'আগের ৩ দিনের জন্য', 'এই সপ্তাহে'],
     ui: {
@@ -4769,6 +5400,60 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       validUntilWord: '{date} পর্যন্ত বৈধ',
       severityMatrixWord: 'পরামর্শ তীব্রতা ম্যাট্রিক্স',
       disasterQuestionsWord: 'দুর্যোগ ব্যবস্থাপনা প্রশ্ন',
+      dominantDriverWord: 'প্রধান পরিসংখ্যানগত চালিকাশক্তি {label} (r = {r})।',
+      secondDriverWord: '{label} r = {r} এর সঙ্গে পিছিয়ে।',
+      effortDilutionWord: 'চেষ্টা উৎপাদনের চেয়ে দ্রুত বেড়েছে, তাই হ্রাসের একটি অংশ প্রকৃত স্টক ক্ষতি নয়, চেষ্টার অপবরহীনতা।',
+      realSignalWord: 'চেষ্টা এই পরিবর্তনটি ব্যাখ্যা করছে না, তাই এটি প্রকৃত উৎপাদনশীলতার সংকেত, চেষ্টার অপবরহীনতা নয়।',
+      veryStrongWord: 'খুব শক্তিশালী',
+      strongWord: 'শক্তিশালী',
+      moderateWord: 'মাঝারি',
+      weakWord: 'দুর্বল',
+      negligibleWord: 'নগণ্য',
+      advisoriesInForceWord: '{harbor} এর জন্য {n} {count} বর্তমানে প্রযোজ্য বা কাছাকাছি।',
+      advisoryIsWord: 'সতর্কতা রয়েছে',
+      advisoriesAreWord: 'সতর্কতা রয়েছে',
+      highestIsWord: 'সবচেয়ে তীব্র {level} {type}: {title}.',
+      noWarningInForceWord: 'বর্তমান চক্রে {harbor} এর জন্য কোনো IMD বা INCOIS সামুদ্রিক সতর্কতা প্রযোজ্য নয়। এটি বুলেটিন সম্পর্কে একটি বক্তব্য, পরিস্থিতির নিশ্চয়তা নয়।',
+      lapsedWord: '{title} — {harbor} এ {level} {type} {date} তারিখে শেষ হয়েছে এবং এখন এই চক্রে প্রযোজ্য নয়।',
+      computedFromLiveWord: 'এটি লাইভ পূর্বাভাস শ্রেণি থেকে গণনা করা হয়েছে।',
+      computedFromReferenceWord: 'এটি রেফারেন্স পূর্বাভাস শ্রেণি থেকে গণনা করা হয়েছে; এই রানে লাইভ ডেটা পাওয়া যায়নি।',
+      weakLinkWord: 'এই সম্পর্কটি ব্যবহারের জন্য অতি দুর্বল।',
+      positiveLinkWord: 'একটি ইতিবাচক',
+      negativeLinkWord: 'একটি অনিবাচক',
+      notWorthActingWord: 'নয়',
+      worthActingFirstWord: 'এই কারণে প্রথমে কাজ করা উচিত',
+      greatCircleStyleWord: 'সরল গ্রেট-সার্কেল পথ',
+      starboardStyleWord: 'স্টারবোর্ড অফসেট করিডোর',
+      inshoreStyleWord: 'আশ্রয়ের জন্য অভ্যন্তরীণ করিডোর',
+      routeLowWord: '{style} প্রস্তাব করা হয়েছে: {km} km, নিরাপত্তা {score}/100, প্রতিটি বিপদ এলাকা থেকে মুক্ত।',
+      routeModerateWord: '{style} পরীক্ষিত বিকল্পগুলির মধ্যে সেরা, তবে পরিস্থিতি সীমান্তে: সমুদ্র {wave} m পর্যন্ত, বাতাস {wind} kt।',
+      routeHighWord: '{style} এখনও {score}/100 দেয়, কিন্তু এই জাহাজের জন্য কোনো করিডোর আরামদায়ক নয়। যাত্রাকে অসুরক্ষিত ধরুন এবং পরের বুলেটিনের পরে আবার যাচাই করুন।',
+      corridorSummaryWord: '{from} থেকে {to} পর্যন্ত সবচেয়ে নিরাপদ করিডোর {km} km, প্রায় {eta}, {speed} kt-এ। নিরাপত্তা স্কোর {score}/100, সামগ্রিক রেটিং {risk}।',
+      atWord: 'এ',
+      fromWord: 'থেকে',
+      correlationLabelChlorophyll: 'ক্লোরোফিল-এ',
+      correlationLabelSst: 'সমুদ্র পৃষ্ঠের তাপমাত্রা',
+      correlationLabelEffort: 'মাছ ধরার প্রচেষ্টা',
+      correlationLabelRainfall: 'বৃষ্টি',
+      correlationDirectionUp: 'এর পরিমাণ বাড়লে উৎপাদনও বাড়ে',
+      correlationDirectionDown: 'এর পরিমাণ বাড়লে উৎপাদন কমে',
+      correlationVerdictWord: '{label} বনাম উৎপাদন: {months} মাসে r = {r}{lagClause}.',
+      lagClauseWord: ', {lag} মাসের বিলম্বে সেরা (r = {lagR})',
+      trendWindowWord: '{months} মাসে ({start} থেকে {end} পর্যন্ত), {region}-এর মাছ ধরায় উৎপাদন {trend}, {catchChange}. প্রতি 1000 নৌকা-দিনে CPUE {cpue} টন, এই সময়সীমায় {cpueChange}.',
+      lagLeaderWord: '{label} প্রায় {lag} মাস আগে উৎপাদনে নেতৃত্ব দেয় (বিলম্বিত r = {lagR} বনাম সামবর্তিক r = {r})। সমুদ্রের প্রতিক্রিয়া ও মাছ ধরার মধ্যে এই ভৌত বিলম্বই এটি, তাই এ বছরের পরিস্থিতি এ বছরের উৎপাদনে দেখা যায় না।',
+      summaryWord: '{region}: উৎপাদন {trend}, {catchChange}, CPUE {cpueChange}, প্রধানত {driver} দ্বারা নির্ধারিত।',
+      effortChangeWord: 'প্রচেষ্টার পরিবর্তন',
+      changeUpWord: 'বেড়েছে',
+      changeDownWord: 'কমেছে',
+      changeFlatWord: 'স্থিতিশীল',
+      landingTrendWord: 'উৎপাদনের ধারা',
+      driverWord: 'সংঘটক',
+      recommendChlWord: '{region}-এর জন্য শক্তিশালীতম পূর্বানুমান Chl-a। প্রচেষ্টা পুরোনো মাছ ধরার এলাকার বদলে উপগ্রহ থেকে পাওয়া ক্লোরোফিল সীমানায় নিন — এতে প্রচেষ্টা ক্ষয়প্রস্থিত ক্ষেত্র থেকে আলাদা থাকে।',
+      recommendSstWord: 'তাপীয় গঠনই আসল সীমাবদ্ধতা। মাছবাহকদের ঠান্ডা মৌসুমের সময়ে সরান এবং যেখানে থার্মোক্লাইন ওপরে উঠেছে সেই সংকীর্ণ গরম জলের বেল্ট এড়িয়ে চলুন।',
+      recommendCpueDropWord: 'CPUE {percent}% কমেছে, তাই এটি সত্যিকারের উৎপাদন ক্ষতি, শুধু প্রচেষ্টার মিশ্রণ নয়। বাহকদের আবার পাঠানোর বদলে মৌসুমি বন্ধ বা প্রচেষ্টার সীমা বিবেচনা করা উচিত।',
+      recommendCpueHoldingWord: 'CPUE মোটামুটি স্থিতিশীল, তাই উন্নত সামুদ্রিক বিজ্ঞানের দিকে বাহকদের নেওয়া বন্ধ করার চেয়ে দ্রুত উৎপাদন ফিরিয়ে আনতে পারে।',
+      recommendNextSeasonWord: '{label} প্রায় {lag} মাস আগে উৎপাদনে নেতৃত্ব দেয়। আগামী মৌসুমের প্রচেষ্টা ঠিক করতে এই মৌসুমের {label} ব্যবহার করুন, গত মৌসুমের আঁতড়ি নয়।',
+      recommendAssessWord: 'বন্ধের যেকোনো সিদ্ধান্তের আগে স্বাধীন মৎস্য স্টক মূল্যায়ন করান: এই সম্পর্কগুলো পরিবেশের নির্দেশক, স্টকের অবস্থার প্রমাণ নয়।',
 
       selectedCorridorWord: 'নির্বাচিত করিডোর',
       viewOnMapWord: 'মানচিত্রে দেখুন →',
@@ -5171,6 +5856,14 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
     seaStates: ['ଶାନ୍ତ', 'ଛୋଟ ଲହର', 'ମୃଦୁ', 'ହାଲୁକା', 'ମଧ୍ୟମ', 'ଅସ୍ମଳ', 'ବହୁତ ଅସ୍ମଳ', 'ଉଚ୍ଚ', 'ଅତ୍ୟଧିକ ଉଚ୍ଚ'],
     riskWords: ['କମ୍', 'ମଧ୍ୟମ', 'ଉଚ୍ଚ', 'ଗମ୍ଭୀର'],
     trendWords: ['ବର୍ଦ୍ଧି', 'ସ୍ଥିର', 'ହ୍ରାସ'],
+    vesselProfiles: {
+      country_boat: { label: "ଦେଶୀୟ ନାହାର / ସର୍ଫ କାନୋ (≤ 6 ମିଟର, ଯାନ୍ତ୍ରିକ ନୁହେଁ)", note: "ପାଣିପାଣି ପ୍ରତି ଅତ୍ୟନ୍ତ ସନ୍ସେବନସହିତ। ଯେଉଁଥିବା ORANGE ସତର୍କତା ଥିଲେ କୂଳରେ ରହନ୍ତୁ।" },
+      motorized_dinghy: { label: "ମୋଟର ଚାଳିତ ଡିଙ୍ଗୀ / FRP ନାହାର (6-10 ମିଟର)", note: "ମୂଳ ପ୍ରୋଫାଇଲ। ନିକଟସ୍ଥ ସୁରକ୍ଷିତ ଆଶ୍ରୟ ପର୍ଯ୍ୟନ୍ତ ପଳાાଇବା ପଥ ରଖନ୍ତୁ।" },
+      gillnetter: { label: "ଗିଲନେଟର (10-14 ମିଟର)", note: "ଢଉ ସମୟକାଳ ଅଳ୍ପ ହେଲେ 2.5 ମିଟର ଢଉରେ ସୀମିତ ଭାବେ କାମ କରିପାରିବ।" },
+      trawler: { label: "ଟ୍ରଲର (15-20 ମିଟର, ଯାନ୍ତ୍ରିକ)", note: "ମଧ୍ୟମ କଠିଣ ସମୁଦ୍ରରେ ସ୍ଥିର। ଅଲ୍ପକିଁଛି ଢଉ ଅତିକ୍ରମ କରନ୍ତୁ ନାହିଁ।" },
+      purse_seiner: { label: "ପର୍ସ ସିନର (20 ମିଟରକୁ ଠାରୁ ଅଧିକ)", note: "ଦୁର୍ବଳ ହେଉଥିବା ଅଲ୍ପକିଁଛିରୁ ପଳାଇବାକୁ ଯଥେଷ୍ଟ ବେଗବାଗୀ। ଜାଲ ବିଛିବା ସମୟ ଧ୍ୟାନ ଦିଅନ୍ତୁ।" },
+      deep_sea_trawler: { label: "ଗଭୀର ସମୁଦ୍ର ଟ୍ରଲର (25 ମିଟରକୁ ଠାରୁ ଅଧିକ)", note: "ଉତ୍ତର ସମୁଦ୍ର ଓ ଓୱେଜ ବ୍ୟାଙ୍କ ଅଞ୍ଚଳ ପାଇଁ ORCA ଦ୍ୱାରା ମୂଲ୍ୟାଙ୍କନ କରାଯାଇଥିବା ଏକମାତ୍ର ପ୍ରୋଫାଇଲ।" },
+    },
     productivityWords: ['ଉତ୍ତମ', 'ଭଲ', 'ମଧ୍ୟମ', 'କମ୍'],
     horizon: ['ବର୍ତ୍ତମାନ', 'ଆଜି', 'ଆସନ୍ତାକାଳେ', 'ଆଗାମୀ ୩ ଦିନ', 'ଏହି ସପ୍ତାହ'],
     ui: {
@@ -5283,6 +5976,60 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       validUntilWord: '{date} ପର୍ଯ୍ୟନ୍ତ ବୈଧ',
       severityMatrixWord: 'ପରାମର୍ଶ ତୀବ୍ରତା ମ୍ୟାଟ୍ରିକ୍ସ',
       disasterQuestionsWord: 'ବିପର୍ଯ୍ୟୟ ପରିଚାଳନା ପ୍ରଶ୍ନ',
+      dominantDriverWord: 'ପ୍ରଧାନ ପରିସଂଖ୍ୟାନଗତ ଚାଳକ {label} (r = {r})।',
+      secondDriverWord: '{label} r = {r} ସହିତ ପଛଇଛି।',
+      effortDilutionWord: 'ଉଦ୍ୟମ ଉତ୍ପାଦନକୁ ଅତିಕ್ರମಿସಿ ବର୍ଦ୍ଧಿସିଛି, ତେଣୁ ହ୍ରାସର କିଛି ଅଂଶ ପ୍ରକୃତ ଷ୍ଟକ କ୍ଷତି ନୁହେଁ, ଉଦ୍ୟମ ବିଳୀନୀକରଣ।',
+      realSignalWord: 'ଉଦ୍ୟମ ଏହି ପରିବର୍ତ୍ତନକୁ ବ୍ୟାଖ୍ୟାନକ୍ଷ କରୁନଥିବା ନୁହେଁ, ତେଣୁ ଏହି ପ୍ରକୃତ ଉତ୍ପାଦକତାର ସଙ୍କେତ, ଉଦ୍ୟମ ବିଳୀନୀକରଣ ନୁହେଁ।',
+      veryStrongWord: 'ବହୁତ ଶକ୍ତିଶାଳୀ',
+      strongWord: 'ଶକ୍ତିଶାଳୀ',
+      moderateWord: 'ମଧ୍ୟମ',
+      weakWord: 'ଦୁର୍ବଳ',
+      negligibleWord: 'ଅତି ସାମାନ୍ୟ',
+      advisoriesInForceWord: '{harbor} ପାଇଁ {n} {count} କାର୍ଯ୍ୟାର୍ହ କିମ୍ବା ନିକଟସ୍ଥ।',
+      advisoryIsWord: 'ସତର୍କତା ଅଛି',
+      advisoriesAreWord: 'ସତର୍କତା ଅଛି',
+      highestIsWord: 'ସର୍ବାଧିକ ତୀବ୍ର {level} {type}: {title}.',
+      noWarningInForceWord: 'ବର୍ତ୍ତମାନ ଚକ୍ରରେ {harbor} ପାଇଁ IMD କିମ୍ବା INCOIS ସାମୁଦ୍ରିକ ସତର୍କତା କାର୍ଯ୍ୟାର୍ହ ନାହିଁ। ଏହା ବୁଲେଟିନ୍ ବିଷୟରେ କଥା, ପରିସ୍ଥିତିର ନିଶ୍ଚୟତା ନୁହେଁ।',
+      lapsedWord: '{title} — {harbor} ରେ {level} {type} {date} ରେ ଶେଷ ହେଇଥିଲା ଏବଂ ବର୍ତ୍ତମାନ ଏହି ଚକ୍ରରେ କାର୍ଯ୍ୟାର୍ହ ନାହିଁ।',
+      computedFromLiveWord: 'ଏହା ଲାଇଭ ପୂର୍ବାଭାସ ଶ୍ରେଣୀରୁ ଗଣନା କରାଗଲା।',
+      computedFromReferenceWord: 'ଏହା ସନ୍ଦର୍ଭ ପୂର୍ବାଭାସ ଶ୍ରେଣୀରୁ ଗଣନା କରାଗଲା; ଏହି ଥରରେ ଲାଇଭ ତଥ୍ୟ ଉପଲବ୍ଧ ହେବାରୁ ନାହିଁ।',
+      weakLinkWord: 'ଏହି ସମ୍ପର୍କ କାର୍ଯ୍ୟାର୍ହ ପାଇଁ ବହୁତ ଦୁର୍ବଳ।',
+      positiveLinkWord: 'ଏକଟି ସକାରାତ୍ମକ',
+      negativeLinkWord: 'ଏକଟି ନକାରାତ୍ମକ',
+      notWorthActingWord: 'ନାହିଁ',
+      worthActingFirstWord: 'ଏହି କାରଣରେ ପ୍ରଥମେ କାର୍ଯ୍ୟ କରିବା ଉଚିତ',
+      greatCircleStyleWord: 'ସରଳ ଗ୍ରେଟ୍-ସର୍କଲ ପଥ',
+      starboardStyleWord: 'ଷ୍ଟାରବୋର୍ଡ ଅଫସେଟ କରିଡର',
+      inshoreStyleWord: 'ଆଶ୍ରୟ ପାଇଁ ଅନ୍ତର୍ଦେଶୀୟ କରିଡର',
+      routeLowWord: '{style} ପ୍ରସ୍ତାବ କରାଗଲା: {km} km, ସୁରକ୍ଷା {score}/100, ପ୍ରତ୍ୟେକ ବିପଦ କ୍ଷେତ୍ରରୁ ମୁକ୍ତ।',
+      routeModerateWord: '{style} ପରୀକ୍ଷିତ ବିକଳ୍ପଗୁଡ଼ିକ ମଧ୍ୟରେ ଉତ୍ତମ, କିନ୍ତୁ ପରିସ୍ଥିତି ସୀମାନ୍ତରେ: ସମୁଦ୍ର {wave} m ପର୍ଯ୍ୟନ୍ତ, ବାତାସ {wind} kt।',
+      routeHighWord: '{style} ଏପରିକୁ {score}/100 ଦେଇଛି, କିନ୍ତୁ ଏହି ଜହାଜ ପାଇଁ କୌଣସି କରିଡର ଆରାମଦାୟକ ନୁହେଁ। ଯାତ୍ରାକୁ ଅସୁରକ୍ଷିତ ବାଲି ଧରନ୍ତୁ ଏବଂ ପରବର୍ତ୍ତୀ ବୁଲେଟିନରେ ପୁଣି ଯାଞ୍ଚ କରନ୍ତୁ।',
+      corridorSummaryWord: '{from} ରୁ {to} ପର୍ଯ୍ୟନ୍ତ ସର୍ବାଧିକ ସୁରକ୍ଷିତ କରିଡର {km} km, ପ୍ରାଣ {eta}, {speed} ktରେ। ସୁରକ୍ଷା ସ୍କୋର {score}/100, ସର୍ବମୋଟ ରେଟିଙ୍ଗ {risk}।',
+      atWord: 'ରେ',
+      fromWord: 'ଠାରୁ',
+      correlationLabelChlorophyll: 'କ୍ଲୋରୋଫିଲ୍-ଏ',
+      correlationLabelSst: 'ସମୁଦ୍ର ଉପରିପାଟ ତାପମାତ୍ରା',
+      correlationLabelEffort: 'ମାଛ ଧରିବା ପ୍ରଚେଷ୍ଟା',
+      correlationLabelRainfall: 'ବର୍ଷା',
+      correlationDirectionUp: 'ଏହାର ପରିମାଣ ବଢ଼ିଲେ ଉତ୍ପାଦନ ମଧ୍ୟ ବଢ଼େ',
+      correlationDirectionDown: 'ଏହାର ପରିମାଣ ବଢ଼ିଲେ ଉତ୍ପାଦନ କମେ',
+      correlationVerdictWord: '{label} ପ୍ରତି ଉତ୍ପାଦନ: {months} ମାସରେ r = {r}{lagClause}.',
+      lagClauseWord: ', {lag} ମାସ ବିଲମ୍ବରେ ସର୍ବୋତ୍ତମ (r = {lagR})',
+      trendWindowWord: '{months} ମାସରେ ({start} ଠାରୁ {end} ପର୍ଯ୍ୟନ୍ତ), {region} ମାଛଧରାରେ ଉତ୍ପାଦନ {trend}, {catchChange}. 1000 ନାହାର-ଦିନ ପ୍ରତି CPUE {cpue} ଟନ, ଏହି ସମୟରେ {cpueChange}.',
+      lagLeaderWord: '{label} ପ୍ରାୟ {lag} ମାସ ପୂର୍ବେ ଉତ୍ପାଦନକୁ ଅଗବରୁଥିବା (ବିଲମ୍ବିତ r = {lagR} ତୁଳନାରେ ସମକାଳୀନ r = {r})। ସମୁଦ୍ରର ପ୍ରତିକ୍ରିୟା ଓ ମାଛଧରା ମଧ୍ୟର ଏହି ଭୌତିକ ବିଲମ୍ବଟି ହେଉଛି, ସେଥିପାଇଁ ଚଳିତ ବର୍ଷର ପରିସ୍ଥିତି ଚଳିତ ବର୍ଷର ଉତ୍ପାଦନରେ ଦେଖାଯାତ୍ତି ନାହିଁ।',
+      summaryWord: '{region}: ଉତ୍ପାଦନ {trend}, {catchChange}, CPUE {cpueChange}, ମୁଖ୍ୟଭାବେ {driver} ଦ୍ୱାରା ନିର୍ଣୟତ।',
+      effortChangeWord: 'ପ୍ରଚେଷ୍ଟାରେ ପରିବର୍ତ୍ତନ',
+      changeUpWord: 'ବଢ଼ିଲା',
+      changeDownWord: 'କମିଲା',
+      changeFlatWord: 'ସ୍ଥିର',
+      landingTrendWord: 'ଉତ୍ପାଦନ ଧାରା',
+      driverWord: 'କାରକ',
+      recommendChlWord: '{region} ପାଇଁ ସବୁତୀକ୍ଷ ପୂର୍ବାନୁମାନ Chl-a। ପରମ୍ପରାଗତ ମାଛଧରା ଅଞ୍ଚଳ ବଦଳାଇ ଉପଗ୍ରହରୁ ମିଳୁଥିବା କ୍ଲୋରୋଫିଲ ସୀମାନ୍ତରେ ପ୍ରଚେଷ୍ଟା ନିଅନ୍ତୁ — ଏହା ପ୍ରଚେଷ୍ଟାକୁ ନଷ୍ଟ ହେଉଥିବା ଅଞ୍ଚଳରୁ ଅଲଗା ରଖେ।',
+      recommendSstWord: 'ତାପମାତ୍ରା ବଣ୍ଟନ ହିଅଁ ପ୍ରାସଙ୍ଗର କାରଣ। ମାଛ ବାହକଙ୍କୁ ଥଣ୍ଡା ଋତୁ କିଣ୍ଡ଼ିରେ ସ୍ଥାନାନ୍ତର କରନ୍ତୁ ଏବଂ ଯେଉଁଥିବା ଥର୍ମୋକ୍ଲାଇନ ଉପରେ ଉଠିଛି ସେହି ସଙ୍କୁଚିତ ଗରମ ଜଳ ପଟ୍ଟାରୁ ବଞ୍ଚନ୍ତୁ।',
+      recommendCpueDropWord: 'CPUE {percent}% କମିଛି, ତେଣୁ ଏହା ସାଚ୍ଚ ଉତ୍ପାଦନ କ୍ଷତି, କେବଳ ପ୍ରଚେଷ୍ଟା ମିଶ୍ରଣ ନୁହେଁ। ବାହକଙ୍କୁ ପୁଣି ପଠାଇବା ବଦଳେ ଋତୁମାନି ବନ୍ଦ କିମ୍ବା ପ୍ରଚେଷ୍ଟା ସୀମା ବିଚାର କରାଯିତୁ।',
+      recommendCpueHoldingWord: 'CPUE ମୋଟାମୋଟି ସ୍ଥିର, ତେଣୁ ଉତ୍ତମ ସମୁଦ୍ର ବିଜ୍ଞାନ ଦକ୍ଷିନ ବାହକଙ୍କୁ ନେବା ବନ୍ଦ ତୁଳନେ ଉତ୍ପାଦନ ଶୀଘ୍ର ପୁନରୁଦ୍ଧାର କରିବ।',
+      recommendNextSeasonWord: '{label} ପ୍ରାୟ {lag} ମାସ ପୂର୍ବେ ଉତ୍ପାଦନକୁ ଅଗବରୁଥିବା। ଆଗାମୀ ଋତୁର ପ୍ରଚେଷ୍ଟା ସ୍ଥିର କରିବା ପାଇଁ ଏହି ଋତୁର {label} ବ୍ୟବହାର କରନ୍ତୁ, ଗତ ଋତୁର ଅଣ୍ଡାନ ନୁହେଁ।',
+      recommendAssessWord: 'ବନ୍ଦର ଯେଉଁଥିବା ନିଷ୍ପତ୍ତିର ପୂର୍ବରୁ ସ୍ୱାଧୀନ ମାଛ ମୂଲ୍ୟାଙ୍କନ କରାନ୍ତୁ: ଏହି ସମ୍ପର୍କ ପରିବେଶର ନିଦାନ, ମାଛ ସଂସ୍ଥିତିର ପ୍ରମାଣ ନୁହେଁ।',
 
       selectedCorridorWord: 'ନିର୍ବାଚିତ କରିଡର',
       viewOnMapWord: 'ମାନଚିତ୍ରରେ ଦେଖନ୍ତୁ →',
@@ -5686,6 +6433,14 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
     seaStates: ['ਸ਼ਾਂਤ', 'ਛੋਟੀਆਂ ਲਹਿਰਾਂ', 'ਚਿਹਣੀ', 'ਹਲਕੀ', 'ਦਰਮਿਆਨਾ', 'ਉਫੜੀ', 'ਬਹੁਤ ਉਫੜੀ', 'ਉੱਚੀ', 'ਬਹੁਤ ਉੱਚੀ'],
     riskWords: ['ਘੱਟ', 'ਦਰਮਿਆਨਾ', 'ਉੱਚ', 'ਗੰਭੀਰ'],
     trendWords: ['ਵਧੀ', 'ਸਥਿਰ', 'ਘਟੀ'],
+    vesselProfiles: {
+      country_boat: { label: "ਦੇਸ਼ੀ ਕਰਾਬ / ਸਰਫ ਕੈਨੋ (≤ 6 ਮੀਟਰ, ਬਿਨਾਂ ਇੰਜਣ)", note: "ਮੌਸਮ ਪ੍ਰਤੀ ਬਹੁਤ ਸੰਵੇਦਨਸ਼ੀਲ। ਕੋਈ ORANGE ਚੇਤਾਵਨੀ ਹੋਵੇ ਤਾਂ ਤਟ ਤੇ ਰਹੋ।" },
+      motorized_dinghy: { label: "ਮੋਟਰ ਚਾਲੀਂ ਡਿੰਗੀ / FRP ਕਰਾਬ (6-10 ਮੀਟਰ)", note: "ਡਿਫੌਲਟ ਪ੍ਰੋਫਾਈਲ। ਨੇੜਲੇ ਸੁਰੱਖਿਅਤ ਸੁਰੱਖਿਆ-ਸਥਾਨ ਤੱਕ ਭੱਗਵਾਣ ਰਾਹ ਰੱਖੋ।" },
+      gillnetter: { label: "ਗਿਲਨੈਟਰ (10-14 ਮੀਟਰ)", note: "ਲਹਿਰਾਂ ਦੀ ਮਿਆਦ ਛੋਟੀ ਹੋਵੇ ਤਾਂ 2.5 ਮੀਟਰ ਲਹਿਰਾਂ ਵਿੱਚ ਸੀਮਿਤ ਕੰਮ ਕਰ ਸਕਦਾ ਹੈ।" },
+      trawler: { label: "ਟਰਾਲਰ (15-20 ਮੀਟਰ, ਇੰਜਣ ਵਾਲਾ)", note: "ਮੱਧਮ ਔਖਾ ਸਮੁੰਦਰ ਵਿੱਚ ਸਥਿਰ। ਤੂਫਾਨ ਦੇ ਢਉਂਅੇ ਦੀਆਂ ਲਹਿਰਾਂ ਪਾਰ ਨਾ ਕਰੋ।" },
+      purse_seiner: { label: "ਪਰਸ ਸੀਨਰ (20 ਮੀਟਰ ਤੋਂ ਵੱਧ)", note: "ਕਮਜ਼ੋਰ ਹੁੰਦੇ ਤੂਫਾਨ ਤੋਂ ਬਚਣ ਲਈ ਲੱਭਦੇ ਤੇਜ਼। ਜਾਲ ਲਗਾਉਣ ਦਾ ਸਮਾਂ ਧਿਆਨ ਵਿੱਚ ਰੱਖੋ।" },
+      deep_sea_trawler: { label: "ਡੂੰਘੇ ਸਮੁੰਦਰੀ ਟਰਾਲਰ (25 ਮੀਟਰ ਤੋਂ ਵੱਧ)", note: "ਉੱਤਰੀ ਸਮੁੰਦਰ ਅਤੇ ਵੇਜ ਬੈਂਕ ਖੇਤਰਾਂ ਲਈ ORCA ਦੁਆਰਾ ਰੇਟ ਕੀਤੀ ਇਕਹੀ ਪ੍ਰੋਫਾਈਲ।" },
+    },
     productivityWords: ['ਵਧੀਆ', 'ਚੰਗੀ', 'ਔਸਤਨ', 'ਘੱਟ'],
     horizon: ['ਹੁਣ', 'ਅੱਜ', 'ਕੱਲ੍ਹ', 'ਅਗਲੇ 3 ਦਿਨਾਂ ਲਈ', 'ਇਸ ਹਫ਼ਤੇ'],
     ui: {
@@ -5798,6 +6553,60 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       validUntilWord: '{date} ਤੱਕ ਵੈਧ',
       severityMatrixWord: 'ਸਲਾਹ ਗੰਭੀਰਤਾ ਮੈਟ੍ਰਿਕਸ',
       disasterQuestionsWord: 'ਆਫ਼ਤ ਪ੍ਰਬੰਧਨ ਸਵਾਲ',
+      dominantDriverWord: 'ਮੁੱਖ ਅੰਕੜੀ ਕਾਰਕ {label} (r = {r})।',
+      secondDriverWord: '{label} r = {r} ਨਾਲ ਪਿੱਛੇ ਹੈ।',
+      effortDilutionWord: 'ਮਿਹਨਤ ਉਤਪਾਦਨ ਨਾਲੋਂ ਤੇਜ਼ੀ ਨਾਲ ਵਧੀ ਹੈ, ਇਸ ਲਈ ਘਾਟ ਦਾ ਕੁਝ ਹਿੱਸਾ ਅਸਲੀ ਸਟਾਕ ਦਾ ਨੁਕਸਾਨ ਨਹੀਂ, ਮਿਹਨਤ ਘੁਰਾਵਾਂ ਹੈ।',
+      realSignalWord: 'ਮਿਹਨਤ ਇਸ ਤਬਦੀਲੀ ਦੀ ਵਿਆਖਿਆ ਨਹੀਂ ਕਰਦੀ, ਇਸ ਲਈ ਇਹ ਅਸਲੀ ਉਤਪਾਦਕਤਾ ਦਾ ਸੰਕੇਤ ਹੈ, ਮਿਹਨਤ ਘੁਰਾਵਾਂ ਨਹੀਂ।',
+      veryStrongWord: 'ਬਹੁਤ ਮਜ਼ਬੂਤ',
+      strongWord: 'ਮਜ਼ਬੂਤ',
+      moderateWord: 'ਮੱਧਮ',
+      weakWord: 'ਕਮਜ਼ੋਰ',
+      negligibleWord: 'ਨਗਣ੍ਯ',
+      advisoriesInForceWord: '{harbor} ਲਈ {n} {count} ਲਾਗੂ ਜਾਂ ਨੇੜੇ ਹਨ।',
+      advisoryIsWord: 'ਚੇਤਾਵਨੀ ਹੈ',
+      advisoriesAreWord: 'ਚੇਤਾਵਨੀਆਂ ਹਨ',
+      highestIsWord: 'ਸਭ ਤੋਂ ਤੀਵ੍ਰ {level} {type}: {title}.',
+      noWarningInForceWord: 'ਮੌਜੂਦਾ ਚੱਕਰ ਵਿੱਚ {harbor} ਲਈ IMD ਜਾਂ INCOIS ਸਮੁੰਦਰੀ ਚੇਤਾਵਨੀ ਲਾਗੂ ਨਹੀਂ ਹੈ। ਇਹ ਬੁਲੇਟਿਨ ਬਾਰੇ ਬਾਤ ਹੈ, ਹਾਲਤਾਂ ਦੀ ਗਰੰਟੀ ਨਹੀਂ।',
+      lapsedWord: '{title} — {harbor} ਉੱਤੇ {level} {type} {date} ਨੂੰ ਸਮਾਪਤ ਹੋਇਆ ਅਤੇ ਹੁਣ ਇਸ ਚੱਕਰ ਵਿੱਚ ਲਾਗੂ ਨਹੀਂ ਹੈ।',
+      computedFromLiveWord: 'ਇਹ ਲਾਈਵ ਪੂਰਵਾਨੁਮਾਨ ਲੜੀ ਤੋਂ ਗਣਿਤ ਕੀਤਾ ਗਿਆ ਹੈ।',
+      computedFromReferenceWord: 'ਇਹ ਹਵਾਲਾ ਪੂਰਵਾਨੁਮਾਨ ਲੜੀ ਤੋਂ ਗਣਿਤ ਕੀਤਾ ਗਿਆ ਹੈ; ਇਸ ਵਾਰ ਲਾਈਵ ਡਾਟਾ ਉਪਲਬਧ ਨਹੀਂ ਸੀ।',
+      weakLinkWord: 'ਇਹ ਸੰਬੰਧ ਕਾਰਜ ਲਈ ਬਹੁਤ ਕਮਜ਼ੋਰ ਹੈ।',
+      positiveLinkWord: 'ਇੱਕ ਸਕਾਰਾਤਮਕ',
+      negativeLinkWord: 'ਇੱਕ ਨਕਾਰਾਤਮਕ',
+      notWorthActingWord: 'ਨਹੀਂ',
+      worthActingFirstWord: 'ਇਸ ਕਾਰਕ ਉੱਤੇ ਪਹਿਲਾਂ ਕਾਰਜ ਕਰਨਾ ਉਚਿਤ ਹੈ',
+      greatCircleStyleWord: 'ਸਿੱਧਾ ਗ੍ਰੇਟ-ਸਰਕਲ ਰਾਹ',
+      starboardStyleWord: 'ਸਟਾਰਬੋਰਡ ਆਫਸੈੱਟ ਕਾਰੀਡੋਰ',
+      inshoreStyleWord: 'ਅੱਭਿਦਰਯੀ ਕਾਰੀਡੋਰ, ਪਨੀ ਲਈ ਦੂਰੀ ਛੱਡ ਕੇ',
+      routeLowWord: '{style} ਦੀ ਸਿਫਾਰਸ਼ ਕੀਤੀ ਜਾਂਦੀ ਹੈ: {km} km, ਸੁਰੱਖਿਆ {score}/100, ਹਰ ਖ਼ਤਰੇ ਖੇਤਰ ਤੋਂ ਮੁਕਤ।',
+      routeModerateWord: '{style} ਜਾਂਚੇ ਗਏ ਵਿਕਲਪਾਂ ਵਿੱਚ ਸਭ ਤੋਂ ਵਧੀਆ, ਪਰ ਹਾਲਤ ਸੀਮਾਂਤ ਤੇ: ਸਮੁੰਦਰ {wave} m ਤੱਕ, ਹਵਾ {wind} kt।',
+      routeHighWord: '{style} ਅਜੇ ਵੀ {score}/100 ਦਿੰਦੀ ਹੈ, ਪਰ ਇਸ ਜਹਾਜ਼ ਲਈ ਕੋਈ ਕਾਰੀਡੋਰ ਆਰਾਮਦਾਇਕ ਨਹੀਂ। ਸਫ਼ਰ ਨੂੰ ਅਸੁਰੱਖਿਅਤ ਮੰਨੋ ਅਤੇ ਅਗਲੇ ਬੁਲੇਟਿਨ ਤੋਂ ਬਾਅਦ ਦੁਬਾਰਾ ਜਾਂਚੋ।',
+      corridorSummaryWord: '{from} ਤੋਂ {to} ਤੱਕ ਸਭ ਤੋਂ ਸੁਰੱਖਿਅਤ ਕਾਰੀਡੋਰ {km} km, ਲਗਭਗ {eta}, {speed} kt ਉੱਤੇ। ਸੁਰੱਖਿਆ ਸਕੋਰ {score}/100, ਕੁੱਲ ਰੇਟਿੰਗ {risk}।',
+      atWord: 'ਤੇ',
+      fromWord: 'ਤੋਂ',
+      correlationLabelChlorophyll: 'ਕਲੋਰੋਫਿਲ-ਏ',
+      correlationLabelSst: 'ਸਮੁੰਦਰ ਸਤ੍ਹਾ ਤਾਪਮਾਨ',
+      correlationLabelEffort: 'ਮੱਛ ਪਕੜਣ ਦੀ ਕੋਸ਼ਿਸ਼',
+      correlationLabelRainfall: 'ਮੀਂਹ',
+      correlationDirectionUp: 'ਇਸ ਦੀ ਮਾਤਰਾ ਵਧਣ ਨਾਲ ਉਤਪਾਦਨ ਵੀ ਵਧਦਾ ਹੈ',
+      correlationDirectionDown: 'ਇਸ ਦੀ ਮਾਤਰਾ ਵਧਣ ਨਾਲ ਉਤਪਾਦਨ ਘਟਦਾ ਹੈ',
+      correlationVerdictWord: '{label} ਬਨਾਮ ਉਤਪਾਦਨ: {months} ਮਹੀਨਿਆਂ ਵਿੱਚ r = {r}{lagClause}.',
+      lagClauseWord: ', {lag} ਮਹੀਨਿਆਂ ਦੀ ਦੇਰੀ ਵਿੱਚ ਸਰਵੋਤਮ (r = {lagR})',
+      trendWindowWord: '{months} ਮਹੀਨਿਆਂ ਵਿੱਚ ({start} ਤੋਂ {end} ਤੱਕ), {region} ਦੀ ਮੱਛ ਪਕੜ ਵਿੱਚ ਉਤਪਾਦਨ {trend}, {catchChange}. ਪ੍ਰਤੀ 1000 ਕਰਾਬ-ਦਿਨ ਲਈ CPUE {cpue} ਟਨ, ਇਸ ਮਿਹਾਦ ਵਿੱਚ {cpueChange}.',
+      lagLeaderWord: '{label} ਲਗਭਗ {lag} ਮਹੀਨਿਆਂ ਪਹਿਲਾਂ ਉਤਪਾਦਨ ਦੀ ਅਗਵਾਈ ਕਰਦਾ ਹੈ (ਵਿਲੰਬਿਤ r = {lagR} ਬਨਾਮ ਸਮਕਾਲੀਨ r = {r})। ਸਮੁੰਦਰ ਦੀ ਪ੍ਰਤੀਕਿਰਿਆ ਅਤੇ ਮੱਛ ਪਕੜ ਵਿਚਕਾਰ ਇਹੀ ਭੌਤਿਕ ਦੇਰੀ ਹੈ, ਇਸ ਲਈ ਇਸ ਸਾਲ ਦੀਆਂ ਹਾਲਤਾਂ ਇਸ ਸਾਲ ਦੇ ਉਤਪਾਦਨ ਵਿੱਚ ਨਹੀਂ ਦਿਸਦੀਆਂ।',
+      summaryWord: '{region}: ਉਤਪਾਦਨ {trend}, {catchChange}, CPUE {cpueChange}, ਮੁੱਖ ਤੌਰ \'ਤੇ {driver} ਦੁਆਰਾ ਨਿਰਧਾਰਿਤ।',
+      effortChangeWord: 'ਕੋਸ਼ਿਸ਼ ਵਿੱਚ ਤਬਦੀਲੀ',
+      changeUpWord: 'ਵਧਿਆ',
+      changeDownWord: 'ਘਟਿਆ',
+      changeFlatWord: 'ਸਥਿਰ',
+      landingTrendWord: 'ਉਤਪਾਦਨ ਰੁਖ',
+      driverWord: 'ਕਾਰਕ',
+      recommendChlWord: '{region} ਲਈ ਸਭ ਤੋਂ ਮਜ਼ਬੂਤ ਸੂਚਕ Chl-a। ਮਹੱਤਾਂ ਮੱਛ ਪਕੜ ਖੇਤਰਾਂ ਦੀ ਥਾਂ ਉਪਗ੍ਰਹ ਤੋਂ ਮਿਲੀ ਕਲੋਰੋਫਿਲ ਅਗੇਤੀਆਂ ਵੱਲ ਯਤਨ ਲੈ ਜਾਓ — ਇਸ ਨਾਲ ਯਤਨ ਗਿਰਦਾਂ ਖੇਤਰ ਤੋਂ ਵੱਖਰੀ ਰਹਿੰਦੀ ਹੈ।',
+      recommendSstWord: 'ਤਾਪਮਾਨ ਬਣਤਰ ਹੀ ਅਸਲ ਪਾਬੰਦੀ ਹੈ। ਮੱਛ ਢੋਆਂ ਨੂੰ ਠੰਢੇ ਮੌਸਮ ਦੀ ਵਿੰਡੀ ਵੱਲ ਲੈ ਜਾਓ ਅਤੇ ਜਿੱਥੇ ਥਰਮੋਕਲਾਈਨ ਉੱਪਰ ਚੜ੍ਹਿਆ ਹੈ, ਉਸ ਸੰਕੁਚਿਤ ਗਰਮ ਪਾਣੀ ਪੱਟੀ ਤੋਂ ਬਚੋ।',
+      recommendCpueDropWord: 'CPUE {percent}% ਘਟਿਆ ਹੈ, ਇਸ ਲਈ ਇਹ ਅਸਲੀ ਉਤਪਾਦਨ ਘਾਟ ਹੈ, ਸਿਰਫ਼ ਯਤਨ ਦੀ ਮਿਲਵੀਟ ਨਹੀਂ। ਢੋਆਂ ਨੂੰ ਮੁੜ ਭੇਜਣ ਦੀ ਥਾਂ ਮੌਸਮੀ ਬੰਦੀ ਜਾਂ ਯਤਨ ਹੱਦਬੰਦੀ ਬਾਰੇ ਵਿਚਾਰ ਕਰੋ।',
+      recommendCpueHoldingWord: 'CPUE ਥੋੜ੍ਹਾ ਸਥਿਰ ਹੈ, ਇਸ ਲਈ ਬਿਹਤਰ ਸਮੁੰਦਰੀ ਵਿਗਿਆਨ ਵੱਲ ਢੋਆਂ ਲੈ ਜਾਣ ਨਾਲ ਬੰਦੀ ਨਾਲੋਂ ਉਤਪਾਦਨ ਜਲਦੀ ਬਾਲਦੀ ਹੋਵੇਗਾ।',
+      recommendNextSeasonWord: '{label} ਲਗਭਗ {lag} ਮਹੀਨੇ ਪਹਿਲਾਂ ਉਤਪਾਦਨ ਦੀ ਅਗਵਾਈ ਕਰਦਾ ਹੈ। ਅਗਲੇ ਮੌਸਮ ਦਾ ਯਤਨ ਤੈਅ ਕਰਨ ਲਈ ਇਸ ਮੌਸਮ ਦਾ {label} ਵਰਤੋ, ਪਿਛਲੇ ਮੌਸਮ ਦੀ ਪਲਡੀ ਨਹੀਂ।',
+      recommendAssessWord: 'ਬੰਦੀ ਦੇ ਕਿਸੇ ਵੀ ਫੈਸਲੇ ਤੋਂ ਪਹਿਲਾਂ ਸੁਤੰਤਰ ਮੱਛ ਸਟਾਕ ਮੁਲਾਂਕਣ ਕਰਵਾਓ: ਇਹ ਸੰਬੰਧ ਵਾਤਾਵਰਣ ਦਾ ਸੰਦੇਹ ਹਨ, ਸਟਾਕ ਸਥਿਤੀ ਦਾ ਸਬੂਤ ਨਹੀਂ।',
 
       selectedCorridorWord: 'ਚੁਣਿਆ ਕੋਰੀਡੋਰ',
       viewOnMapWord: 'ਨਕਸ਼ੇ ਤੇ ਦੇਖੋ →',

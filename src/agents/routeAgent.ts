@@ -46,6 +46,8 @@ import {
   compassPoint,
 } from '../core/geo';
 import type { LatLon } from '../core/geo';
+import type { Phrasebook } from '../core/i18n';
+import { vesselName } from '../core/localize';
 
 const RANK_TO_RISK: RiskLevel[] = ['LOW', 'MODERATE', 'HIGH', 'SEVERE'];
 const WALK_STEPS = 24;
@@ -85,9 +87,9 @@ export const routeAgent: AgentDefinition = defineAgent(
     const vesselProfile = VESSEL_BY_ID[requested.id] ?? VESSEL_BY_ID.motorized_dinghy;
 
     const candidates: RouteData[] = [
-      buildRoute('great-circle', originHarbor, destination, vesselProfile, 0),
-      buildOffsetCorridor(originHarbor, destination, vesselProfile, 'starboard', +1),
-      buildOffsetCorridor(originHarbor, destination, vesselProfile, 'inshore', -1),
+      buildRoute('great-circle', originHarbor, destination, vesselProfile, 0, book),
+      buildOffsetCorridor(originHarbor, destination, vesselProfile, 'starboard', +1, book),
+      buildOffsetCorridor(originHarbor, destination, vesselProfile, 'inshore', -1, book),
     ].filter(Boolean) as RouteData[];
 
     const oceanSource = liveDataCycle().label.includes('Live')
@@ -105,13 +107,21 @@ export const routeAgent: AgentDefinition = defineAgent(
 
     const findings = [
       finding(
-        `The safest corridor from ${originHarbor.shortName} to ${destination.name} is ${roundTo(route.totalDistanceKm, 1)} km, about ${route.estimatedTimeHours} at ${vesselProfile.speedKnots} kt. Safety score ${route.safetyScore}/100 with a ${riskWord(book, route.riskLevel)} overall rating.`,
+        book.ui.corridorSummaryWord
+          .replace('{from}', originHarbor.shortName)
+          .replace('{to}', destination.name)
+          .replace('{km}', String(roundTo(route.totalDistanceKm, 1)))
+          .replace('{eta}', route.estimatedTimeHours)
+          .replace('{speed}', String(vesselProfile.speedKnots))
+          .replace('{score}', String(route.safetyScore))
+          .replace('{risk}', riskWord(book, route.riskLevel)),
         {
           confidence: 0.82,
           evidence: [
             ev(book.evidenceKeys.safetyScore, `${route.safetyScore}/100`, 'ORCA routing engine'),
             ev(book.evidenceKeys.eta, route.estimatedTimeHours, 'ORCA routing engine'),
             ev(book.evidenceKeys.vessel, vesselProfile.label, 'ORCA vessel profile'),
+              ev(book.evidenceKeys.distanceFromPort, `${roundTo(route.totalDistanceKm, 1)} km`, 'ORCA geodesic engine'),
             ev('Distance', `${roundTo(route.totalDistanceKm, 1)} km`, 'ORCA geodesic engine'),
           ],
           riskLevel: route.riskLevel,
@@ -221,6 +231,7 @@ function buildRoute(
   destination: Endpoint,
   vessel: { maxWaveHeightMeters: number; maxWindKnots: number; speedKnots: number; label: string; id: string },
   offsetKm: number,
+  book: Phrasebook,
 ): RouteData | null {
   const directBearing = initialBearingDeg(origin, destination);
   const directDistance = haversineKm(origin, destination);
@@ -312,7 +323,7 @@ function buildRoute(
   return {
     id: `route-${label}-${origin.name.toLowerCase().replace(/\s+/g, '-')}`,
     vesselType: vessel.id,
-    vesselLabel: vessel.label,
+    vesselLabel: vesselName(vessel, book).label,
     speedKnots,
     origin: { latitude: origin.latitude, longitude: origin.longitude, name: origin.name },
     destination: { latitude: destination.latitude, longitude: destination.longitude, name: destination.name },
@@ -326,7 +337,7 @@ function buildRoute(
     riskSegments,
     alternatives: [],
     geofenceConflicts,
-    recommendation: describeRoute(label, safetyScore, totalDistanceKm, riskLevel, worstExposureOnRoute),
+    recommendation: describeRoute(label, safetyScore, totalDistanceKm, riskLevel, worstExposureOnRoute, book),
   };
 }
 
@@ -336,6 +347,7 @@ function buildOffsetCorridor(
   vessel: { maxWaveHeightMeters: number; maxWindKnots: number; speedKnots: number; label: string; id: string },
   side: 'starboard' | 'inshore',
   sign: number,
+  book: Phrasebook,
 ): RouteData | null {
   // Two-pass search: start with a generous offset and shrink it until the
   // corridor is actually clear. Crude, but deterministic and explainable.
@@ -343,7 +355,7 @@ function buildOffsetCorridor(
   let best: RouteData | null = null;
 
   for (const fraction of [0.18, 0.12, 0.08, 0.05, 0.03]) {
-    const candidate = buildRoute(side, origin, destination, vessel, roundTo(directDistance * fraction * sign, 1));
+    const candidate = buildRoute(side, origin, destination, vessel, roundTo(directDistance * fraction * sign, 1), book);
     if (!candidate) continue;
     if (!best || candidate.safetyScore > best.safetyScore) best = candidate;
     if (candidate.riskLevel === 'LOW' && candidate.geofenceConflicts.length === 0) break;
@@ -471,27 +483,41 @@ function formatHours(hours: number): string {
   return m > 0 ? `${h} h ${m} m` : `${h} h`;
 }
 
+/**
+ * One-sentence verdict on a candidate corridor, in the fisher's language.
+ *
+ * The style label, the distance, the score, the exposure and the verdict are
+ * separate fields on purpose: they are interpolated into a translated template
+ * rather than concatenated with English glue, so a Tamil recommendation is
+ * assembled entirely from Tamil fragments.
+ */
 function describeRoute(
   label: string,
   safetyScore: number,
   distanceKm: number,
   riskLevel: RiskLevel,
   exposure: Exposure,
+  book: Phrasebook,
 ): string {
+  const ui = book.ui;
   const style =
     label === 'great-circle'
-      ? 'The direct great-circle track'
+      ? ui.greatCircleStyleWord
       : label === 'starboard'
-        ? 'A starboard offset corridor'
-        : 'An inshore corridor trading distance for shelter';
+        ? ui.starboardStyleWord
+        : ui.inshoreStyleWord;
 
-  if (riskLevel === 'LOW') {
-    return `${style} is recommended: ${roundTo(distanceKm, 1)} km at ${safetyScore}/100 safety, clear of every hazard cell.`;
-  }
-  if (riskLevel === 'MODERATE') {
-    return `${style} is the best of the options tested, but conditions are marginal: seas reach ${exposure.wave} m and winds ${exposure.wind} kt.`;
-  }
-  return `${style} still scores ${safetyScore}/100, but no corridor is comfortable for this vessel. Treat the trip as unsafe and re-check after the next bulletin.`;
+  const fill = (template: string): string =>
+    template
+      .replace('{style}', style)
+      .replace('{km}', String(roundTo(distanceKm, 1)))
+      .replace('{score}', String(safetyScore))
+      .replace('{wave}', String(exposure.wave))
+      .replace('{wind}', String(exposure.wind));
+
+  if (riskLevel === 'LOW') return fill(ui.routeLowWord);
+  if (riskLevel === 'MODERATE') return fill(ui.routeModerateWord);
+  return fill(ui.routeHighWord);
 }
 
 const riskWord = (book: { riskWords: [string, string, string, string] }, level: RiskLevel): string =>

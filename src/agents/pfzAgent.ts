@@ -21,6 +21,7 @@ import {
 } from '../core/dataAccess';
 import { haversineKm, initialBearingDeg, roundTo, compassPoint } from '../core/geo';
 import { productivityWord, trendWord } from '../core/i18n';
+import { vesselName } from '../core/localize';
 
 /** Minimum chlorophyll for a cell to be considered a fishing hotspot (mg/m3). */
 const CHL_THRESHOLD = 1.5;
@@ -103,11 +104,11 @@ export const pfzAgent: AgentDefinition = defineAgent('PFZ_AGENT', (context: Agen
   if (!reachFeasible) {
     findings.push(
       finding(
-        `At ${nearest.distanceKm} km this ground sits beyond the usual operating range of a ${context.vessel.label.toLowerCase()} (${context.vessel.typicalRangeNm} NM). A nearer or more sheltered option may be the better call.`,
+        `At ${nearest.distanceKm} km this ground sits beyond the usual operating range of a ${vesselName(context.vessel, book).label} (${context.vessel.typicalRangeNm} NM). A nearer or more sheltered option may be the better call.`,
         {
           confidence: 0.7,
           riskLevel: 'MODERATE',
-          evidence: [ev(book.evidenceKeys.vessel, context.vessel.label, 'ORCA vessel profile')],
+          evidence: [ev(book.evidenceKeys.vessel, vesselName(context.vessel, book).label, 'ORCA vessel profile')],
         },
       ),
     );

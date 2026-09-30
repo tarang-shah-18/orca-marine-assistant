@@ -25,6 +25,7 @@ import {
 } from './base';
 import { computeRiskTrajectory, describeTrend } from '../core/riskTrajectory';
 import { currentBulletins } from '../core/alerts';
+import { vesselName } from '../core/localize';
 
 /** Contribution of each agent to the composite risk score. */
 const WEIGHTS = {
@@ -156,7 +157,7 @@ export const riskAgent: AgentDefinition = defineAgent('RISK_VALIDATION_AGENT', (
         `Window outlook over the next 48 h: now ${nowWord}, then ${trajectory.points
           .slice(1)
           .map((p) => `${p.label} ${book.riskWords[RISK_RANK[p.riskLevel]]}`)
-          .join(', ')}. ${describeTrend(trajectory.trend).replace(/^./, (c) => c.toUpperCase())}.${windowSentence} ${trajectory.fromLive ? 'Computed from the live forecast series.' : 'Computed from the reference forecast series; the live feed was unreachable at this run.'}`,
+          .join(', ')}. ${describeTrend(trajectory.trend).replace(/^./, (c) => c.toUpperCase())}.${windowSentence} ${trajectory.fromLive ? book.ui.computedFromLiveWord : book.ui.computedFromReferenceWord}`,
         {
           confidence: 0.75,
           riskLevel: finalRisk,
@@ -226,7 +227,7 @@ function verdictSentence(risk: RiskLevel, context: AgentContext): string {
       return ui.verdictHighWord;
     case 'SEVERE':
     default:
-      return ui.verdictSevereWord.replace('{vessel}', context.vessel.label.toLowerCase());
+      return ui.verdictSevereWord.replace('{vessel}', vesselName(context.vessel, context.book).label);
   }
 }
 

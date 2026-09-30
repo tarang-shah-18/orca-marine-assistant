@@ -113,7 +113,7 @@ export const gisAgent: AgentDefinition = defineAgent('GIS_AGENT', (context: Agen
     findings.push(
       finding(
         `Three fishing grounds lie within reach: ${nearby
-          .map((z) => `${z.name} at ${z.distanceKm} km`)
+          .map((z) => `${z.name} ${context.book.ui.atWord} ${z.distanceKm} km`)
           .join(', ')}.`,
         {
           confidence: 0.85,

@@ -31,6 +31,9 @@ import {
   getWeather,
 } from './dataAccess';
 import { computeRiskTrajectory } from './riskTrajectory';
+import type { Phrasebook } from './i18n';
+import { getPhrasebook } from './i18n';
+import { vesselName } from './localize';
 
 /** Advisory level ordering, worst first — mirrors the critic's escalation. */
 const ADVISORY_RANK: Record<string, number> = {
@@ -57,8 +60,10 @@ const RISK_RANK: Record<RiskLevel, number> = {
 export function fleetOverview(
   vesselId: string = DEFAULT_VESSEL_ID,
   now: Date = new Date(),
+  book: Phrasebook = getPhrasebook('en-IN'),
 ): FleetOverview {
   const vessel = VESSEL_BY_ID[vesselId] ?? VESSEL_BY_ID[DEFAULT_VESSEL_ID];
+  const vesselText = vesselName(vessel, book);
 
   const harbours: FleetHarbourSnapshot[] = HARBORS.map((harbor) => {
     const weather = getWeather(harbor.id);
@@ -119,7 +124,7 @@ export function fleetOverview(
 
   return {
     vesselId: vessel.id,
-    vesselLabel: vessel.label,
+    vesselLabel: vesselText.label,
     generatedAt: now.toISOString(),
     counts,
     harbours,

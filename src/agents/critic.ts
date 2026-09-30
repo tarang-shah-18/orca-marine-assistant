@@ -17,6 +17,7 @@
 import { AdvisoryLevel, AgentType, RiskLevel, RISK_ORDER } from '../types';
 import { AgentContext, AgentDefinition, defineAgent, ev, finding, ok } from './base';
 import { Phrasebook, riskWord } from '../core/i18n';
+import { applyAlertLocalization } from '../core/localize';
 
 export interface CritiqueResult {
   text: string;
@@ -83,14 +84,19 @@ export function critiqueAnswer(
   // is already reflected in the MODERATE verdict, and promoting it here used to
   // produce a bare "ALERTS:" header with nothing after it.
   const severe = active.filter((a) => RISK_ORDER[ADVISORY_RISK[a.advisoryLevel]] >= RISK_ORDER.HIGH);
-  const alreadyNamed = severe.some((a) => output.includes(a.title));
+  // Localize first: the escalation banner is the one line a fisher reads
+  // before anything else, so it must be in their language. It used to read raw
+  // `a.title` and `a.action`, pushing the English bulletin copy of every
+  // in-force advisory to the very top of a non-English answer.
+  const localized = severe.map((a) => applyAlertLocalization(a, book));
+  const alreadyNamed = localized.some((a) => output.includes(a.title));
 
   let escalated = false;
   if (severe.length > 0 && !alreadyNamed) {
     escalated = true;
-    const leading = `${book.labels.alerts.toUpperCase()}: ${severe
-      .map((a) => `[${a.advisoryLevel}] ${a.title} — ${a.action}`)
-      .join(' ')}`;
+      const leading = `${book.labels.alerts.toUpperCase()}: ${localized
+        .map((a) => `[${a.advisoryLevel}] ${a.title} — ${a.action}`)
+        .join(' ')}`;
     output = `${leading}\n\n${output}`;
     corrections.push('Forced the in-force advisory to the top of the answer');
   }

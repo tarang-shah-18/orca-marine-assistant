@@ -21,6 +21,7 @@ import {
 import { getOceanAt, getOceanState } from '../core/dataAccess';
 import { haversineKm, roundTo } from '../core/geo';
 import { seaStateWord } from '../core/i18n';
+import { vesselName } from '../core/localize';
 
 export const oceanAgent: AgentDefinition = defineAgent('OCEAN_AGENT', (context: AgentContext) => {
   const { book } = context;
@@ -94,11 +95,11 @@ export const oceanAgent: AgentDefinition = defineAgent('OCEAN_AGENT', (context: 
   if (vesselExceedance) {
     findings.push(
       finding(
-        `${maxWave} m exceeds the ${context.vessel.maxWaveHeightMeters} m freeboard limit for a ${context.vessel.label.toLowerCase()}. ${context.vessel.note}`,
+        `${maxWave} m exceeds the ${context.vessel.maxWaveHeightMeters} m freeboard limit for a ${vesselName(context.vessel, book).label}. ${vesselName(context.vessel, book).note}`,
         {
           confidence: 0.85,
           riskLevel: 'HIGH',
-          evidence: [ev(book.evidenceKeys.vessel, context.vessel.label, 'ORCA vessel profile')],
+          evidence: [ev(book.evidenceKeys.vessel, vesselName(context.vessel, book).label, 'ORCA vessel profile')],
         },
       ),
     );

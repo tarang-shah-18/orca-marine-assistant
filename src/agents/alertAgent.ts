@@ -67,7 +67,7 @@ export const alertAgent: AgentDefinition = defineAgent(
       return ok(
         [
           finding(
-            `No IMD or INCOIS marine warning is in force for ${context.anchor.label} in the current cycle. That is a statement about the bulletin, not a guarantee of conditions.`,
+            book.ui.noWarningInForceWord.replace('{harbor}', context.anchor.label),
             {
               confidence: 0.8,
               evidence: [
@@ -94,7 +94,18 @@ export const alertAgent: AgentDefinition = defineAgent(
 
     const findings: ReturnType<typeof finding>[] = [
       finding(
-        `${headline.length} marine ${headline.length === 1 ? 'advisory is' : 'advisories are'} in force or approaching for ${context.anchor.label}. Highest is a ${highest.advisoryLevel} ${labelFor(highest.type)}: ${applyAlertLocalization(highest, book).title}.`,
+        book.ui.advisoriesInForceWord
+          .replace('{n}', String(headline.length))
+          .replace('{harbor}', context.anchor.label)
+          .replace(
+            '{count}',
+            headline.length === 1 ? book.ui.advisoryIsWord : book.ui.advisoriesAreWord,
+          ) +
+          ' ' +
+          book.ui.highestIsWord
+            .replace('{level}', highest.advisoryLevel)
+            .replace('{type}', labelFor(highest.type))
+            .replace('{title}', applyAlertLocalization(highest, book).title),
         {
           confidence: 0.92,
           riskLevel,
@@ -107,9 +118,14 @@ export const alertAgent: AgentDefinition = defineAgent(
 
     for (const alert of headline.slice(0, 3)) {
       const localized = applyAlertLocalization(alert, book);
+      // `validUntilWord` is a template, not a phrase: it carries a `{date}`
+      // slot. It used to be interpolated as `${book.ui.validUntilWord} ${...}`,
+      // which printed the literal text "{date} வரை செல்லுபடியாகும்" into the
+      // answer. Every other call site replaces the slot; this one did not.
+      const validUntil = book.ui.validUntilWord.replace('{date}', localized.validUntil);
       findings.push(
         finding(
-          `${localized.title} (${alert.advisoryLevel}, ${alert.severity}) — ${localized.description} ${book.ui.validUntilWord} ${localized.validUntil}. ${localized.action}`,
+          `${localized.title} (${alert.advisoryLevel}, ${alert.severity}) — ${localized.description} ${validUntil}. ${localized.action}`,
           {
             confidence: 0.9,
             riskLevel: ADVISORY_RISK[alert.advisoryLevel],
@@ -166,9 +182,15 @@ export const alertAgent: AgentDefinition = defineAgent(
     // Expired bulletins are reported, never silently dropped: a lapsed watch
     // must not keep steering this harbour's verdict.
     for (const alert of lapsed.slice(0, 2)) {
+      const localized = applyAlertLocalization(alert, book);
       findings.push(
         finding(
-          `${applyAlertLocalization(alert, book).title} — ${alert.advisoryLevel} ${labelFor(alert.type)} over ${context.anchor.label} lapsed on ${applyAlertLocalization(alert, book).validUntil} and no longer governs this cycle.`,
+          book.ui.lapsedWord
+            .replace('{title}', localized.title)
+            .replace('{level}', alert.advisoryLevel)
+            .replace('{type}', labelFor(alert.type))
+            .replace('{harbor}', context.anchor.label)
+            .replace('{date}', localized.validUntil),
           {
             confidence: 0.98,
             evidence: [ev('Expired', alert.validUntil, alert.source)],

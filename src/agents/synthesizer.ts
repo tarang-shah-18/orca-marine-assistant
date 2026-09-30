@@ -332,7 +332,7 @@ function buildSituation(input: SynthesisInput): string[] {
     const o = artifacts.ocean;
     out.push(
       `◆ ${L.waves} ${o.waveHeightMeters} m — ${seaStateWord(book, o.waveHeightMeters)}. ` +
-        `${book.ui.swellWord} ${o.swellDirection} at ${o.wavePeriodSeconds} s, ${book.ui.currentWord} ${o.currentKnots} kt ${o.currentDirection}. ` +
+        `${book.ui.swellWord} ${o.swellDirection} ${book.ui.atWord} ${o.wavePeriodSeconds} s, ${book.ui.currentWord} ${o.currentKnots} kt ${o.currentDirection}. ` +
         `${L.sst} ${o.seaSurfaceTempCelsius}° C (${o.sstAnomalyC > 0 ? '+' : ''}${o.sstAnomalyC}° C).`,
     );
   }
@@ -341,7 +341,7 @@ function buildSituation(input: SynthesisInput): string[] {
   if (artifacts.weather && (parsed.facets.weather || ['TIDE_WEATHER_SEA', 'WEATHER_BRIEF', 'SAFETY_ASSESSMENT', 'GENERAL_MARINE'].includes(parsed.intent))) {
     const w = artifacts.weather;
     out.push(
-      `◆ ${L.wind} ${w.windSpeedKnots} kt (${w.windSpeedKmph} km/h) from ${w.windDirection}, ` +
+      `◆ ${L.wind} ${w.windSpeedKnots} kt (${w.windSpeedKmph} km/h) ${book.ui.fromWord} ${w.windDirection}, ` +
         `${book.evidenceKeys.gusts} ${w.gustKnots} kt, ${book.ui.visibilityWord} ${w.visibilityKm} km, ` +
         `${book.evidenceKeys.rain} ${w.rainProbability}%, ${book.ui.lightningWord} ${w.lightningRisk}. ${localizeCondition(w.condition, book)}` +
         (w.squallWarning ? ` ${book.ui.squallBulletinWord}` : ''),
@@ -424,7 +424,7 @@ function buildSituation(input: SynthesisInput): string[] {
   if (artifacts.routeData) {
     const r = artifacts.routeData;
     out.push(
-      `◆ ${L.route} — ${r.totalDistanceKm} km, ${r.estimatedTimeHours} at ${r.speedKnots} kt. ` +
+      `◆ ${L.route} — ${r.totalDistanceKm} km, ${r.estimatedTimeHours} ${book.ui.atWord} ${r.speedKnots} kt. ` +
         `${book.evidenceKeys.safetyScore}: ${r.safetyScore}/100 (${riskWord(book, r.riskLevel)}).` +
         (r.riskSegments.length > 0
           ? `\n   ${book.ui.watchWord}: ${r.riskSegments.map((s) => `${s.segment} — ${localizeRouteReason(s.reason, book)}`).join('; ')}`

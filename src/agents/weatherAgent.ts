@@ -21,6 +21,7 @@ import {
 } from './base';
 import { getWeather } from '../core/dataAccess';
 import { knotsToKmph, roundTo } from '../core/geo';
+import { vesselName } from '../core/localize';
 
 /** Gust factor applied to the sustained wind for small-craft planning. */
 const GUST_FACTOR = 1.45;
@@ -96,11 +97,11 @@ export const weatherAgent: AgentDefinition = defineAgent('WEATHER_AGENT', (conte
   if (vesselExceedance) {
     findings.push(
       finding(
-        `Peak wind of ${maxWind} kt exceeds the ${context.vessel.maxWindKnots} kt operational limit for a ${context.vessel.label.toLowerCase()}. ${context.vessel.note}`,
+        `Peak wind of ${maxWind} kt exceeds the ${context.vessel.maxWindKnots} kt operational limit for a ${vesselName(context.vessel, context.book).label}. ${vesselName(context.vessel, context.book).note}`,
         {
           confidence: 0.85,
           riskLevel: 'HIGH',
-          evidence: [ev(context.book.evidenceKeys.vessel, context.vessel.label, 'ORCA vessel profile')],
+          evidence: [ev(context.book.evidenceKeys.vessel, vesselName(context.vessel, context.book).label, 'ORCA vessel profile')],
         },
       ),
     );
