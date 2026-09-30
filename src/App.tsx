@@ -48,9 +48,14 @@ function loadTheme(): ThemeMode {
     const stored = localStorage.getItem(THEME_KEY);
     if (stored === 'light' || stored === 'dark') return stored;
   } catch {
-    // Private mode / no storage: default to dark.
+    // Private mode / no storage: fall through to the default below.
   }
-  return 'dark';
+  // Light by default. Most fishers check this on a phone in bright sun, where
+  // a dark console is harder to read than the HUD look suggests, and the light
+  // palette is a full theme rather than an inverted afterthought — it redefines
+  // the same slate ramp, so every component flips without a single class change.
+  // The toggle still offers dark for night work.
+  return 'light';
 }
 
 /**
@@ -96,6 +101,13 @@ export default function App() {
   // the choice survives a reload.
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+    // Keep the mobile browser chrome (status bar, address bar) the same colour
+    // as the page. This is a phone-first app, and a dark status bar above a
+    // light page reads as a rendering fault. index.html ships the light value so
+    // the first paint is already correct.
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', theme === 'dark' ? '#032b43' : '#f6f9fc');
     try {
       localStorage.setItem(THEME_KEY, theme);
     } catch {

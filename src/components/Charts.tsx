@@ -12,6 +12,19 @@ import { Phrasebook } from '../core/i18n';
  * for exactly this reason.
  */
 
+/*
+ * Chart chrome reads the themed custom properties rather than literal hex, so
+ * it follows the light/dark palette like everything else. These were Tailwind's
+ * *default* slate/sky values pasted in as literals, which bypassed the `@theme`
+ * ramp: on the light palette the gridlines stayed near-black and the axis
+ * labels stayed a foreign grey. Set through `style` rather than as presentation
+ * attributes, because `var()` in an SVG presentation attribute is not reliably
+ * resolved across browsers.
+ */
+const GRID_STROKE = 'var(--color-slate-800)';
+const AXIS_FILL = 'var(--color-slate-500)';
+const ACCENT = 'var(--color-sky-400)';
+
 interface ChartsProps {
   visualizations: VisualizationData[];
   /** Only render the first N, for the inline answer view. */
@@ -96,10 +109,10 @@ const TimeSeries: React.FC<{ viz: VisualizationData }> = ({ viz }) => {
             x2={W - PAD.right}
             y1={y(min + span * f)}
             y2={y(min + span * f)}
-            stroke="#1e293b"
+            style={{ stroke: GRID_STROKE }}
             strokeWidth="1"
           />
-          <text x={2} y={y(min + span * f) + 3} fill="#64748b" fontSize="8">
+          <text x={2} y={y(min + span * f) + 3} style={{ fill: AXIS_FILL }} fontSize="8">
             {(min + span * f).toFixed(span < 4 ? 1 : 0)}
           </text>
         </g>
@@ -123,7 +136,7 @@ const TimeSeries: React.FC<{ viz: VisualizationData }> = ({ viz }) => {
 
       {viz.categories.map((c, i) =>
         i % labelStride === 0 ? (
-          <text key={`${c}-${i}`} x={x(i)} y={H - 4} fill="#64748b" fontSize="8" textAnchor="middle">
+          <text key={`${c}-${i}`} x={x(i)} y={H - 4} style={{ fill: AXIS_FILL }} fontSize="8" textAnchor="middle">
             {c}
           </text>
         ) : null,
@@ -150,7 +163,7 @@ const GroupedBars: React.FC<{ viz: VisualizationData }> = ({ viz }) => {
         x2={W - PAD.right}
         y1={H - PAD.bottom}
         y2={H - PAD.bottom}
-        stroke="#1e293b"
+        style={{ stroke: GRID_STROKE }}
       />
       {Array.from({ length: count }).map((_, i) => {
         const left = PAD.left + i * groupWidth + 2;
@@ -176,7 +189,7 @@ const GroupedBars: React.FC<{ viz: VisualizationData }> = ({ viz }) => {
             <text
               x={left + (groupWidth - 4) / 2}
               y={H - 4}
-              fill="#64748b"
+              style={{ fill: AXIS_FILL }}
               fontSize="8"
               textAnchor="middle"
             >
@@ -185,7 +198,7 @@ const GroupedBars: React.FC<{ viz: VisualizationData }> = ({ viz }) => {
           </g>
         );
       })}
-      <text x={2} y={10} fill="#64748b" fontSize="8">
+      <text x={2} y={10} style={{ fill: AXIS_FILL }} fontSize="8">
         {max.toFixed(1)}
       </text>
     </svg>
@@ -256,7 +269,7 @@ const LayerReadout: React.FC<{ viz: VisualizationData; book?: Phrasebook }> = ({
       id: 'points',
       label: book ? book.ui.scannedSamplePointsWord : 'Scanned sample points',
       detail: `${geo.points.length} ${book ? book.ui.plottedWord : 'plotted'}`,
-      color: '#38bdf8',
+      color: ACCENT,
     });
   }
 

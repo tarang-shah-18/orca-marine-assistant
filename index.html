@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -8,7 +8,15 @@
     <meta property="og:title" content="ORCA - Marine Ecosystem Reasoning with Collaborative Agents" />
     <meta property="og:description" content="Conversational AI decision-support system for fishermen (SIH 2026 Problem ID 26176) with agentic orchestration, voice STT/TTS, PFZ detection, weather/ocean safety validation, and marine GIS maps." />
     <meta property="og:type" content="website" />
-    <meta name="theme-color" content="#032b43" />
+    <!--
+      `data-theme="light"` above is the real default, not a placeholder: it
+      applies the palette on the very first paint, before React mounts. Setting
+      it from a useEffect instead (where the toggle writes it) showed the dark
+      console for a frame on every load, and an inline bootstrap script is not
+      an option here because the CSP is `script-src 'self'`. React corrects the
+      attribute on mount if this visitor previously chose dark.
+    -->
+    <meta name="theme-color" content="#f6f9fc" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;600;700&display=swap" rel="stylesheet">

@@ -3,12 +3,23 @@ import type { RiskTrajectory, RiskTrajectoryPoint } from '../types';
 import { RISK_ORDER } from '../types';
 import type { Phrasebook } from '../core/i18n';
 
+/*
+ * Severity colours are literal hex on purpose and must NOT be routed through
+ * the themed `slate`/`cyan` ramp. These are safety codes, not decoration: a
+ * fisher has to learn that orange means HIGH and read it the same way on a
+ * phone in daylight and on a wheelhouse screen at night. Rebinding them to
+ * theme tokens would make the code for a given risk level change with the
+ * palette, which is exactly the failure mode a risk strip exists to prevent.
+ */
 const RISK_COLOR: Record<string, string> = {
   LOW: '#22c55e',
   MODERATE: '#f59e0b',
   HIGH: '#f97316',
   SEVERE: '#ef4444',
 };
+
+/** Neutral chrome for a level outside the four known codes — follows the theme. */
+const RISK_FALLBACK = 'var(--color-slate-500)';
 
 const RISK_RANK: Record<string, number> = { LOW: 0, MODERATE: 1, HIGH: 2, SEVERE: 3 };
 
@@ -90,7 +101,7 @@ export const RiskStrip: React.FC<{ trajectory: RiskTrajectory; book: Phrasebook 
                 width={barW}
                 height={h}
                 rx={2.5}
-                fill={RISK_COLOR[p.riskLevel] ?? '#64748b'}
+                fill={RISK_COLOR[p.riskLevel] ?? RISK_FALLBACK}
                 opacity={best ? 1 : 0.85}
               />
               <text
