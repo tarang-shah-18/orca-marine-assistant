@@ -31,7 +31,13 @@ import {
 import { DATA_CYCLE, GEOFENCES, TIDE_STATIONS } from '../src/core/dataset';
 import { getPhrasebook, SUPPORTED_PHRASEBOOK_LANGUAGES, riskWord } from '../src/core/i18n';
 import { localizeCondition, localizeSource } from '../src/core/localize';
-import { buildOcean, fetchPointOceanBatch } from '../src/core/live';
+import {
+  buildOcean,
+  fetchPointOceanBatch,
+  peekLive,
+  refreshLive,
+  upstreamFailures,
+} from '../src/core/live';
 import type { MarineAlert } from '../src/types';
 
 let passed = 0;
@@ -332,6 +338,168 @@ function approx(a: number, b: number, tolerance: number): boolean {
       'live · an uncovered cell yields no reading, not a fabricated one',
       !gap || (gap.sst === undefined && gap.wave === undefined),
       JSON.stringify(gap),
+    );
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Section 7 — back-off scope
+ *
+ * The two reasons a feed goes quiet need different scopes, and getting this
+ * wrong is silent and costly in both directions:
+ *
+ *   * "upstream answered, but had no usable data" is a fact about one *point*
+ *     (Digha has no marine grid cell). Keyed by product alone, one uncovered
+ *     harbour took live sea state away from every other harbour on the coast
+ *     for the whole window — a real production outage, reported only as
+ *     "retrying in ~10 min" with no hint that Digha had caused it.
+ *   * "HTTP 429" is the upstream throttling the whole account/IP, so it must
+ *     park the product *everywhere*. Scoped per point, a throttled IP would be
+ *     re-hit from the next harbour, deepening the throttle.
+ *
+ * Both are asserted here, in that order, so the rate-limit case runs last and
+ * its global window cannot mask the point-scoped one.
+ * ------------------------------------------------------------------ */
+
+{
+  const realFetch = globalThis.fetch;
+  const marineCalls: string[] = [];
+  let throttleDigha = false;
+
+  const hours = 96;
+  const block = (value: number | null): Record<string, unknown> => {
+    const out: Record<string, unknown> = { time: new Array(hours).fill('2026-09-29T00:00') };
+    for (const k of [
+      'wave_height', 'wave_direction', 'wave_period',
+      'wind_wave_height', 'wind_wave_direction', 'wind_wave_period',
+      'swell_wave_height', 'swell_wave_direction', 'swell_wave_period',
+      'sea_surface_temperature', 'ocean_current_velocity', 'ocean_current_direction',
+    ]) {
+      out[k] = new Array(hours).fill(value);
+    }
+    return out;
+  };
+  const forecast = {
+    time: new Array(hours).fill('2026-09-29T00:00'),
+    temperature_2m: new Array(hours).fill(29),
+    precipitation_probability: new Array(hours).fill(10),
+    precipitation: new Array(hours).fill(0),
+    weather_code: new Array(hours).fill(1),
+    wind_speed_10m: new Array(hours).fill(11),
+    wind_direction_10m: new Array(hours).fill(250),
+    wind_gusts_10m: new Array(hours).fill(18),
+    cloud_cover: new Array(hours).fill(30),
+    visibility: new Array(hours).fill(14000),
+  };
+
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = new URL(String(input));
+    if (url.hostname === 'marine-api.open-meteo.com') {
+      const lat = url.searchParams.get('latitude') ?? '';
+      marineCalls.push(lat);
+      if (throttleDigha) {
+        return new Response('throttled', { status: 429, headers: { 'Retry-After': '1' } });
+      }
+      // Batched multi-point call answers positionally with an array.
+      if (lat.includes(',')) {
+        return new Response(
+          JSON.stringify(
+            lat.split(',').map(() => ({
+              sea_surface_temperature: 28.4,
+              wave_height: 1.1,
+              ocean_current_velocity: 0.5,
+            })),
+          ),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      // Digha sits on the edge of the marine model: HTTP 200, every value null.
+      const payload = { hourly: lat.startsWith('21.9') ? block(null) : block(1.2) };
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (url.hostname === 'api.open-meteo.com') {
+      return new Response(JSON.stringify({ hourly: forecast }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    // Everything else (ERA5, GDACS) is irrelevant to these two assertions.
+    return new Response('unavailable', { status: 503 });
+  }) as typeof fetch;
+
+  try {
+    // 1. A point the model cannot answer falls back honestly...
+    await refreshLive('digha');
+    const digha = peekLive('digha');
+    check(
+      'live · a point with no coverage reports not-live rather than inventing sea state',
+      digha?.statuses.ocean === false,
+      String(digha?.statuses.ocean),
+    );
+    const reason = upstreamFailures().ocean?.reason ?? '';
+    check(
+      'live · the no-data reason names the point that caused it',
+      reason.includes('without usable data') && reason.includes('21.928,87.263'),
+      reason,
+    );
+
+    // 2. ...and must not take the live feed away from any other harbour.
+    marineCalls.length = 0;
+    const kochi = await refreshLive('kochi');
+    const kochiSnap = peekLive('kochi');
+    check(
+      'live · one uncovered point does not park the feed for every other harbour',
+      kochiSnap?.statuses.ocean === true,
+      `ocean live=${kochiSnap?.statuses.ocean}, ${marineCalls.length} marine call(s)`,
+    );
+    check(
+      'live · a recovered feed clears the standing failure record',
+      upstreamFailures().ocean === undefined,
+      JSON.stringify(upstreamFailures().ocean),
+    );
+    check(
+      'live · the report is a full refresh, not a cache hit',
+      kochi.anyLive === true,
+      `anyLive=${kochi.anyLive}`,
+    );
+
+    // 3. A 429 is the upstream throttling everyone: it must park every point,
+    //    and every product on that host. Exactly one call is spent learning
+    //    that (the one that gets refused); after it, nothing else may go out.
+    throttleDigha = true;
+    marineCalls.length = 0;
+    await refreshLive('ratnagiri');
+    const discovery = marineCalls.length;
+    marineCalls.length = 0;
+    const after = await refreshLive('goa');
+    check(
+      'live · a 429 parks the host: later harbours make no marine call at all',
+      discovery === 1 && marineCalls.length === 0,
+      `${discovery} call(s) to discover the throttle, then ${marineCalls.length} more`,
+    );
+    check(
+      'live · the throttle is reported against the grid scan too, naming the host',
+      (upstreamFailures()['ocean-points']?.reason ?? '').includes('rate limited by marine-api'),
+      JSON.stringify(upstreamFailures()['ocean-points']),
+    );
+    // The refresh must still answer, and must say so honestly: ocean is
+    // reported not-live (reference), while an unthrottled product stays live.
+    const oceanAfter = after.liveProducts.find((p) => p.product === 'ocean');
+    const weatherAfter = after.liveProducts.find((p) => p.product === 'weather');
+    check(
+      'live · a throttled refresh still answers, with ocean marked not-live',
+      oceanAfter !== undefined && oceanAfter.live === false,
+      JSON.stringify(oceanAfter),
+    );
+    check(
+      'live · a throttle on one product does not fake out the others',
+      weatherAfter !== undefined && weatherAfter.live === true,
+      JSON.stringify(weatherAfter),
     );
   } finally {
     globalThis.fetch = realFetch;

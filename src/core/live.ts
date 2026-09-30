@@ -132,20 +132,50 @@ const RATE_LIMIT_COOLDOWN_MS = envMs('ORCA_RATE_LIMIT_COOLDOWN_MS', 15 * 60 * 10
  * up a recovered feed, rarely enough not to hammer the upstream every request.
  */
 const NO_DATA_RETRY_MS = envMs('ORCA_NO_DATA_RETRY_MS', 10 * 60 * 1000);
-// Two independent windows: a throttled feed waits out the upstream's rate-limit
-// window, while a feed that answered but could not be built merely waits for
-// its own retry cadence. They must not overwrite each other.
+// Two independent windows with different scopes:
+//   * a rate limit is the upstream throttling the whole account/IP, so it is
+//     keyed by **host**: the marine API answering 429 for the harbour
+//     observation is the same throttle the fishing-ground grid scan would hit,
+//     and parking only the product that happened to ask first would send the
+//     next call straight back into it;
+//   * "answered but had no usable data" is a property of one *point* (a marine
+//     grid that does not cover Digha, a schema change at a single cell), so it
+//     must park only that point. Keying it by product alone let one uncovered
+//     harbour take the live sea state away from every other harbour on the
+//     coast for the whole window.
 const RATE_LIMITED_UNTIL = new Map<string, number>();
 const NO_DATA_UNTIL = new Map<string, number>();
 
-function coolingDown(product: string): boolean {
-  const until = Math.max(RATE_LIMITED_UNTIL.get(product) ?? 0, NO_DATA_UNTIL.get(product) ?? 0);
-  return until > Date.now();
+/** The host a throttled request went to, or '' when the URL is unusable. */
+function upstreamHost(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return '';
+  }
 }
 
-function markRateLimited(product: string, retryAfterMs: number): void {
-  RATE_LIMITED_UNTIL.set(product, Date.now() + Math.max(RATE_LIMIT_COOLDOWN_MS, retryAfterMs || 0));
-  NO_DATA_UNTIL.delete(product);
+/** Cooldown key for a product at one point. */
+function pointScope(product: string, scope?: string): string {
+  return scope ? `${product}@${scope}` : product;
+}
+
+function coolingDown(product: string, url: string, scope?: string): boolean {
+  const rateLimit = RATE_LIMITED_UNTIL.get(upstreamHost(url)) ?? 0;
+  const noData = NO_DATA_UNTIL.get(pointScope(product, scope)) ?? 0;
+  return Math.max(rateLimit, noData) > Date.now();
+}
+
+/**
+ * A successful call clears only that point's no-data window. It deliberately
+ * does *not* clear a host's rate-limit window: one product answering proves
+ * nothing about whether the next call will be throttled, and clearing on
+ * success is how a back-off ends up re-armed on every request.
+ */
+function markRateLimited(url: string, retryAfterMs: number): void {
+  const host = upstreamHost(url);
+  if (!host) return;
+  RATE_LIMITED_UNTIL.set(host, Date.now() + Math.max(RATE_LIMIT_COOLDOWN_MS, retryAfterMs || 0));
 }
 
 function describeError(reason: unknown): string {
@@ -164,33 +194,43 @@ function recordUpstreamOutcome(
   ok: boolean,
   reason?: string,
   extendCooldown = true,
+  scope?: string,
 ): void {
+  const scopeKey = pointScope(product, scope);
   if (ok) {
     UPSTREAM_FAILURES.delete(product);
-    RATE_LIMITED_UNTIL.delete(product);
-    NO_DATA_UNTIL.delete(product);
+    NO_DATA_UNTIL.delete(scopeKey);
     return;
   }
   if (UPSTREAM_FAILURES.size >= MAX_TRACKED_PRODUCTS) {
     const oldest = UPSTREAM_FAILURES.keys().next().value;
     if (oldest !== undefined) UPSTREAM_FAILURES.delete(oldest);
   }
-  UPSTREAM_FAILURES.set(product, { at: new Date().toISOString(), reason: reason ?? 'unknown' });
+  const suffix = scope ? ` (at ${scope})` : '';
+  UPSTREAM_FAILURES.set(product, {
+    at: new Date().toISOString(),
+    reason: `${reason ?? 'unknown'}${suffix}`,
+  });
   if (!extendCooldown) return;
   // Extend, never shorten, within this window only: an active rate-limit
   // window is tracked separately and must not be cut short here.
   const until = Date.now() + NO_DATA_RETRY_MS;
-  if ((NO_DATA_UNTIL.get(product) ?? 0) < until) NO_DATA_UNTIL.set(product, until);
+  if ((NO_DATA_UNTIL.get(scopeKey) ?? 0) < until) NO_DATA_UNTIL.set(scopeKey, until);
 }
 
 /**
- * True when a product has failed but its back-off has lapsed, so the next
+ * True when something has failed but its back-off has lapsed, so the next
  * request should retry it instead of serving the cached snapshot. This is what
- * lets a rate-limited feed recover on its own while the snapshot TTL holds.
+ * lets a throttled or lapsed feed recover on its own while the snapshot TTL
+ * holds it in place otherwise.
  */
 function retryableUpstream(): boolean {
-  for (const product of UPSTREAM_FAILURES.keys()) {
-    if (!coolingDown(product)) return true;
+  const now = Date.now();
+  for (const until of RATE_LIMITED_UNTIL.values()) {
+    if (until <= now) return true;
+  }
+  for (const until of NO_DATA_UNTIL.values()) {
+    if (until <= now) return true;
   }
   return false;
 }
@@ -198,14 +238,28 @@ function retryableUpstream(): boolean {
 /**
  * One upstream call, honouring the back-off. Never throws: a failure is
  * recorded and reported as `null` so the caller degrades to reference data.
+ *
+ * `scope` is the coordinate this call is about, so a point-specific back-off
+ * never blocks any other point on the same feed.
  */
-async function fetchUpstream(product: string, url: string): Promise<any | null> {
-  if (coolingDown(product)) {
-    const until = Math.max(RATE_LIMITED_UNTIL.get(product) ?? 0, NO_DATA_UNTIL.get(product) ?? 0);
-    const mins = Math.ceil((until - Date.now()) / 60000);
+async function fetchUpstream(
+  product: string,
+  url: string,
+  scope?: string,
+): Promise<any | null> {
+  const host = upstreamHost(url);
+  if (coolingDown(product, url, scope)) {
+    const rateLimit = RATE_LIMITED_UNTIL.get(host) ?? 0;
+    const noData = NO_DATA_UNTIL.get(pointScope(product, scope)) ?? 0;
+    const until = Math.max(rateLimit, noData);
+    const mins = Math.max(1, Math.ceil((until - Date.now()) / 60000));
+    const why =
+      rateLimit >= noData
+        ? `rate limited by ${host || 'upstream'}`
+        : 'no usable data upstream';
     // Report the standing back-off without extending it, or every skipped
     // request would push the window further out and it would never lapse.
-    recordUpstreamOutcome(product, false, `rate limited — retrying in ~${mins} min`, false);
+    recordUpstreamOutcome(product, false, `${why} — retrying in ~${mins} min`, false, scope);
     return null;
   }
   try {
@@ -215,11 +269,11 @@ async function fetchUpstream(product: string, url: string): Promise<any | null> 
     if (err instanceof UpstreamRateLimit) {
       // The rate-limit window is the back-off here; do not also arm the
       // no-data retry cadence, which would outlive the throttle it caused.
-      markRateLimited(product, err.retryAfterMs);
-      recordUpstreamOutcome(product, false, describeError(err), false);
+      markRateLimited(url, err.retryAfterMs);
+      recordUpstreamOutcome(product, false, describeError(err), false, scope);
       return null;
     }
-    recordUpstreamOutcome(product, false, describeError(err));
+    recordUpstreamOutcome(product, false, describeError(err), true, scope);
     return null;
   }
 }
@@ -638,17 +692,22 @@ export async function fetchPointOceanBatch(
     const lats = slice.map((p) => p.lat.toFixed(3)).join(',');
     const lons = slice.map((p) => p.lon.toFixed(3)).join(',');
 
-    let rows: any[] = [];
-    try {
-      const data = await fetchJson(
-        `https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}` +
-          `&current=sea_surface_temperature,wave_height,ocean_current_velocity&timezone=auto&wind_speed_unit=kn`,
-        12000,
-      );
-      rows = Array.isArray(data) ? data : [data];
-    } catch {
-      rows = [];
-    }
+    // Routed through the back-off seam, like every other upstream call. This
+    // is the highest-volume caller in the whole engine (a cold refresh issues
+    // one call per batch of 15 points), so a bare `fetchJson` here would ignore
+    // a standing throttle and re-hit the upstream on every request, deepening
+    // it, with the 429 swallowed by a bare catch and never reported.
+    //
+    // Tracked as its own product: the grid scan and the harbour observation are
+    // different calls against the same host, and a throttle on one should be
+    // visible on its own rather than overwriting the other's reason. The rate
+    // limit is still global to the host, so the window parks both.
+    const data = await fetchUpstream(
+      'ocean-points',
+      `https://marine-api.open-meteo.com/v1/marine?latitude=${lats}&longitude=${lons}` +
+        `&current=sea_surface_temperature,wave_height,ocean_current_velocity&timezone=auto&wind_speed_unit=kn`,
+    );
+    const rows: any[] = Array.isArray(data) ? data : data ? [data] : [];
 
     // Positional match: the response order is the request order, and the
     // coordinates it echoes back are snapped to the model grid, so they cannot
@@ -1209,24 +1268,64 @@ export interface LiveResult {
   harborId: string;
   fetchedAt: string;
   liveProducts: ProductStatus[];
-  allLive: boolean;
+  /**
+   * True when *at least one* product is live. Named `anyLive` rather than
+   * `allLive` because the old name said the opposite of what it computed, and
+   * a reader trusting it would conclude a harbour was fully live while its sea
+   * state was a reference snapshot. To ask "is everything live?", read
+   * `liveProducts` — that is the only honest source.
+   */
+  anyLive: boolean;
 }
 
+/**
+ * The full product roster, in report order. Enumerated from this list rather
+ * than from a snapshot's own keys so the status report always names every
+ * product — an operator must be able to tell "still warming up" (nothing
+ * fetched yet) from "this feed is down" (fetched, failed), and an empty
+ * product list conflates the two.
+ */
+const LIVE_PRODUCT_ROSTER: LiveProduct[] = [
+  'weather',
+  'ocean',
+  'pfz',
+  'hotspots',
+  'alerts',
+  'historical',
+  'disasters',
+];
+
+const PRODUCT_SOURCE: Record<LiveProduct, string> = {
+  weather: 'Open-Meteo Forecast API (ECMWF IFS)',
+  ocean: 'Open-Meteo Marine API (WaveWatch-III)',
+  pfz: 'Open-Meteo marine + MODIS-Aqua climatology',
+  hotspots: 'Open-Meteo marine grid scan',
+  alerts: 'Derived live forecast + GDACS (UN)',
+  historical: 'ERA5 reanalysis (ECMWF / Copernicus)',
+  disasters: 'GDACS (UN / European Commission)',
+};
+
+const OFFLINE_SOURCE = 'Reference snapshot (offline fallback)';
+
 function statusesOf(s: LiveSnapshot): ProductStatus[] {
-  const productSource: Record<LiveProduct, string> = {
-    weather: 'Open-Meteo Forecast API (ECMWF IFS)',
-    ocean: 'Open-Meteo Marine API (WaveWatch-III)',
-    pfz: 'Open-Meteo marine + MODIS-Aqua climatology',
-    hotspots: 'Open-Meteo marine grid scan',
-    alerts: 'Derived live forecast + GDACS (UN)',
-    historical: 'ERA5 reanalysis (ECMWF / Copernicus)',
-    disasters: 'GDACS (UN / European Commission)',
-  };
-  return (Object.keys(s.statuses) as LiveProduct[]).map((product) => ({
+  return LIVE_PRODUCT_ROSTER.map((product) => {
+    const live = s.statuses[product] === true;
+    return {
+      product,
+      live,
+      source: live ? PRODUCT_SOURCE[product] : OFFLINE_SOURCE,
+      fetchedAt: live ? new Date(s.fetchedAt).toISOString() : null,
+    };
+  });
+}
+
+/** Every product reported as not-yet-live, for an engine that has not fetched. */
+function coldStatuses(): ProductStatus[] {
+  return LIVE_PRODUCT_ROSTER.map((product) => ({
     product,
-    live: s.statuses[product],
-    source: s.statuses[product] ? productSource[product] : 'Reference snapshot (offline fallback)',
-    fetchedAt: s.statuses[product] ? new Date(s.fetchedAt).toISOString() : null,
+    live: false,
+    source: OFFLINE_SOURCE,
+    fetchedAt: null,
   }));
 }
 
@@ -1302,7 +1401,9 @@ export function liveStatusReport(): {
 } {
   const any = newestLiveSnapshot();
   if (!any) {
-    return { live: false, fetchedAt: null, products: [], sources: [] };
+    // A woken-from-sleep engine has not fetched anything yet. Say so, and name
+    // every product as pending rather than reporting an empty list.
+    return { live: false, fetchedAt: null, products: coldStatuses(), sources: [] };
   }
   const products = statusesOf(any);
   const online = products.filter((p) => p.live);
@@ -1357,7 +1458,7 @@ export async function refreshLive(
       harborId,
       fetchedAt: new Date(existing.fetchedAt).toISOString(),
       liveProducts: statusesOf(existing),
-      allLive: Object.values(existing.statuses).some(Boolean),
+      anyLive: Object.values(existing.statuses).some(Boolean),
     };
   }
 
@@ -1369,7 +1470,7 @@ export async function refreshLive(
       harborId,
       fetchedAt: snap ? new Date(snap.fetchedAt).toISOString() : new Date().toISOString(),
       liveProducts: snap ? statusesOf(snap) : [],
-      allLive: snap ? Object.values(snap.statuses).some(Boolean) : false,
+      anyLive: snap ? Object.values(snap.statuses).some(Boolean) : false,
     };
   }
 
@@ -1386,18 +1487,23 @@ export async function refreshLive(
     const now = new Date();
 
     const query = `latitude=${target.latitude.toFixed(4)}&longitude=${target.longitude.toFixed(4)}`;
+    // The coordinate the back-off is scoped to, so a point the upstream cannot
+    // answer (Digha has no marine grid cell) never parks the feed elsewhere.
+    const scope = `${target.latitude.toFixed(3)},${target.longitude.toFixed(3)}`;
     const [forecastPayload, marinePayload] = await Promise.all([
       fetchUpstream(
         'weather',
         `https://api.open-meteo.com/v1/forecast?${query}` +
           `&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,cloud_cover,visibility` +
           `&timezone=auto&forecast_days=${FORECAST_DAYS}&wind_speed_unit=kn&temperature_unit=celsius&precipitation_unit=mm`,
+        scope,
       ),
       fetchUpstream(
         'ocean',
         `https://marine-api.open-meteo.com/v1/marine?${query}` +
           `&hourly=wave_height,wave_direction,wave_period,wind_wave_height,wind_wave_direction,wind_wave_period,swell_wave_height,swell_wave_direction,swell_wave_period,sea_surface_temperature,ocean_current_velocity,ocean_current_direction` +
           `&timezone=auto&forecast_days=${FORECAST_DAYS}&wind_speed_unit=kn`,
+        scope,
       ),
     ]);
 
@@ -1414,14 +1520,14 @@ export async function refreshLive(
       // here. A refused fetch already recorded its own reason in
       // `fetchUpstream`, and overwriting it would hide the real cause (a rate
       // limit, a timeout) behind a vague "no data".
-      recordUpstreamOutcome('weather', weather !== null, 'upstream answered without usable data');
+      recordUpstreamOutcome('weather', weather !== null, 'upstream answered without usable data', true, scope);
     }
 
     let ocean: OceanData | null = null;
     if (marinePayload?.hourly) {
       ocean = buildOcean(harbor.id, harbor.shortName, marinePayload.hourly, sstBase, fetchedLabel);
       if (ocean) statuses.ocean = true;
-      recordUpstreamOutcome('ocean', ocean !== null, 'upstream answered without usable data');
+      recordUpstreamOutcome('ocean', ocean !== null, 'upstream answered without usable data', true, scope);
     }
 
     // PFZ grounds + hotspot grid: heavier, parallel point scans.
@@ -1473,7 +1579,7 @@ export async function refreshLive(
     harborId,
     fetchedAt: snap ? new Date(snap.fetchedAt).toISOString() : new Date().toISOString(),
     liveProducts: snap ? statusesOf(snap) : [],
-    allLive: snap ? Object.values(snap.statuses).some(Boolean) : false,
+    anyLive: snap ? Object.values(snap.statuses).some(Boolean) : false,
   };
 }
 
