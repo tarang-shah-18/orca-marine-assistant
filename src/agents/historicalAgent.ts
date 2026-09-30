@@ -173,7 +173,7 @@ export const historicalAgent: AgentDefinition = defineAgent(
       series: [
         {
           id: 'catch',
-          label: 'Landing index',
+          label: book.ui.chartLandingIndexWord,
           color: '#22c55e',
           unit: 'index',
           points: series.map((p) => p.catchIndex),
@@ -194,7 +194,7 @@ export const historicalAgent: AgentDefinition = defineAgent(
         },
         {
           id: 'effort',
-          label: 'Effort index',
+          label: book.ui.chartEffortIndexWord,
           color: '#38bdf8',
           unit: 'index',
           points: series.map((p) => p.effortIndex),
@@ -205,8 +205,8 @@ export const historicalAgent: AgentDefinition = defineAgent(
     publish(context, {
       id: 'viz-cpue',
       type: 'chart',
-      title: 'CPUE and effort standardisation',
-      subtitle: 'Landings per unit of fishing effort',
+      title: book.ui.chartCpueTitleWord,
+      subtitle: book.ui.chartCpueSubtitleWord,
       categories: series.map((p) => p.month),
       series: [
         {
@@ -218,7 +218,7 @@ export const historicalAgent: AgentDefinition = defineAgent(
         },
         {
           id: 'effort',
-          label: 'Effort index',
+          label: book.ui.chartEffortIndexWord,
           color: '#38bdf8',
           unit: 'index',
           points: series.map((p) => p.effortIndex),

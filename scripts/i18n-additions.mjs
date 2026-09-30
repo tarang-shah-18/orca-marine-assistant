@@ -287,6 +287,8 @@ import { CONNECTOR_ADDITIONS } from './connector-additions.mjs';
 import { HISTORICAL_ADDITIONS } from './historical-additions.mjs';
 import { CHANGE_ADDITIONS } from './change-additions.mjs';
 import { RECOMMEND_ADDITIONS } from './recommend-additions.mjs';
+import { CHROME_TRANSLATIONS } from './chrome-additions.mjs';
+import { CHART_ADDITIONS } from './chart-additions.mjs';
 
 for (const [lang, pack] of Object.entries(ROUTE_ADDITIONS)) {
   Object.assign(TRANSLATIONS[lang], pack);
@@ -305,6 +307,14 @@ for (const [lang, pack] of Object.entries(CHANGE_ADDITIONS)) {
 }
 
 for (const [lang, pack] of Object.entries(RECOMMEND_ADDITIONS)) {
+  Object.assign(TRANSLATIONS[lang], pack);
+}
+
+for (const [lang, pack] of Object.entries(CHROME_TRANSLATIONS)) {
+  Object.assign(TRANSLATIONS[lang], pack);
+}
+
+for (const [lang, pack] of Object.entries(CHART_ADDITIONS)) {
   Object.assign(TRANSLATIONS[lang], pack);
 }
 

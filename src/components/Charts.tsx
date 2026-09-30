@@ -29,8 +29,14 @@ interface ChartsProps {
   visualizations: VisualizationData[];
   /** Only render the first N, for the inline answer view. */
   limit?: number;
-  /** Phrasebook for localizing layer-readout chrome. */
-  book?: Phrasebook;
+  /**
+   * Required, not optional. Every layer-readout string lives in the phrasebook, and
+   * an optional `book` plus an English `? :` fallback meant a single call site that
+   * forgot the prop silently rendered English in all eleven languages — which is
+   * exactly what ResearcherDashboard did. Making it required turns that class of
+   * bug into a compile error instead of a silent leak.
+   */
+  book: Phrasebook;
 }
 
 export const Charts: React.FC<ChartsProps> = ({ visualizations, limit, book }) => {
@@ -46,7 +52,7 @@ export const Charts: React.FC<ChartsProps> = ({ visualizations, limit, book }) =
   );
 };
 
-const VizCard: React.FC<{ viz: VisualizationData; book?: Phrasebook }> = ({ viz, book }) => {
+const VizCard: React.FC<{ viz: VisualizationData; book: Phrasebook }> = ({ viz, book }) => {
   const titleId = useId();
 
   return (
@@ -213,13 +219,6 @@ function geoEntryCount(geo: NonNullable<VisualizationData['geo']>): number {
   return (geo.circles?.length ?? 0) + (geo.polygons?.length ?? 0) + (geo.points?.length ?? 0);
 }
 
-const LEVEL_LABEL: Record<string, string> = {
-  favorable: 'favorable',
-  moderate: 'moderate',
-  hazard: 'hazard',
-  restricted: 'restricted',
-};
-
 const LEVEL_LABELS_EN: Record<string, keyof Phrasebook['ui']> = {
   favorable: 'levelFavorableWord',
   moderate: 'levelModerateWord',
@@ -227,9 +226,11 @@ const LEVEL_LABELS_EN: Record<string, keyof Phrasebook['ui']> = {
   restricted: 'levelRestrictedWord',
 };
 
-const levelLabel = (level: string, book?: Phrasebook): string => {
+const levelLabel = (level: string, book: Phrasebook): string => {
   const key = LEVEL_LABELS_EN[level];
-  return key && book ? book.ui[key] : LEVEL_LABEL[level] ?? level;
+  // An unmapped level is rendered as its own canonical token, not an English
+  // word: the key IS the label in every language.
+  return key ? book.ui[key] : level;
 };
 
 /**
@@ -237,12 +238,12 @@ const levelLabel = (level: string, book?: Phrasebook): string => {
  * geographic, so the chat card shows what is on the layer and points at the
  * GIS map for the spatial view — never a bare "nothing here" sentence.
  */
-const LayerReadout: React.FC<{ viz: VisualizationData; book?: Phrasebook }> = ({ viz, book }) => {
+const LayerReadout: React.FC<{ viz: VisualizationData; book: Phrasebook }> = ({ viz, book }) => {
   const geo = viz.geo;
   if (!geo || geoEntryCount(geo) === 0) {
     return (
       <p className="text-[11px] text-slate-500 italic">
-        {book ? book.ui.noLayerDataWord : 'No data for this layer right now.'}
+        {book.ui.noLayerDataWord}
       </p>
     );
   }
@@ -252,7 +253,7 @@ const LayerReadout: React.FC<{ viz: VisualizationData; book?: Phrasebook }> = ({
     rows.push({
       id: circle.id,
       label: circle.label,
-      detail: `${book ? book.ui.radiusWord : 'Radius'} ${circle.radiusKm} km · ${levelLabel(circle.level, book)}`,
+      detail: `${book.ui.radiusWord} ${circle.radiusKm} km · ${levelLabel(circle.level, book)}`,
       color: circle.color,
     });
   }
@@ -260,15 +261,15 @@ const LayerReadout: React.FC<{ viz: VisualizationData; book?: Phrasebook }> = ({
     rows.push({
       id: polygon.id,
       label: polygon.label,
-      detail: `${book ? book.ui.boundaryPolygonWord : 'Boundary polygon'} · ${polygon.ring.length} ${book ? book.ui.pointsWord : 'points'}`,
+      detail: `${book.ui.boundaryPolygonWord} · ${polygon.ring.length} ${book.ui.pointsWord}`,
       color: polygon.color,
     });
   }
   if (rows.length === 0 && (geo.points?.length ?? 0) > 0) {
     rows.push({
       id: 'points',
-      label: book ? book.ui.scannedSamplePointsWord : 'Scanned sample points',
-      detail: `${geo.points.length} ${book ? book.ui.plottedWord : 'plotted'}`,
+      label: book.ui.scannedSamplePointsWord,
+      detail: `${geo.points.length} ${book.ui.plottedWord}`,
       color: ACCENT,
     });
   }
@@ -292,14 +293,12 @@ const LayerReadout: React.FC<{ viz: VisualizationData; book?: Phrasebook }> = ({
       ))}
       {hidden > 0 && (
         <p className="text-[10px] text-slate-500 italic">
-          {book
-            ? book.ui.moreFeaturesOverlaidWord.replace('{n}', String(hidden))
-            : `…and ${hidden} more feature${hidden === 1 ? '' : 's'} overlaid on the GIS map.`}
+          {book.ui.moreFeaturesOverlaidWord.replace('{n}', String(hidden))}
         </p>
       )}
       {!hidden && rows.length > 0 && (
         <p className="text-[9px] text-slate-500 pt-0.5">
-          {book ? book.ui.overlaidOnMapWord : 'Overlaid on the Marine GIS map (Zones / layers panel).'}
+          {book.ui.overlaidOnMapWord}
         </p>
       )}
     </div>

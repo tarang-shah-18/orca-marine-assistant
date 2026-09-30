@@ -14,7 +14,7 @@ import { localizeTideReason } from '../core/localize';
 interface TideTableProps {
   report?: TideReport;
   compact?: boolean;
-  book?: Phrasebook;
+  book: Phrasebook;
 }
 
 export const TideTable: React.FC<TideTableProps> = ({ report, compact = false, book }) => {
@@ -27,24 +27,24 @@ export const TideTable: React.FC<TideTableProps> = ({ report, compact = false, b
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-[11px] font-bold text-cyan-300">
           <Waves className="w-3.5 h-3.5" />
-          <span>{book ? `${book.labels.tide} — ${report.station.name}` : `Tide — ${report.station.name}`}</span>
+          <span>{`${book.labels.tide} — ${report.station.name}`}</span>
         </span>
         <span className="text-[10px] text-slate-500">
-          {book ? book.ui.tideRangeWord : 'range'} {report.maxRangeMeters.toFixed(2)} m
+          {book.ui.tideRangeWord} {report.maxRangeMeters.toFixed(2)} m
         </span>
       </div>
 
       <div className="flex items-center gap-3 text-[11px]">
         <span className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1">
-          <span className="text-slate-400">{book ? book.ui.nowWord : 'Now'} </span>
+          <span className="text-slate-400">{book.ui.nowWord} </span>
           <span className="font-bold text-slate-50">{report.currentLevel.toFixed(2)} m</span>
           <span className={`ml-1.5 ${report.isRising ? 'text-emerald-400' : 'text-amber-400'}`}>
-            {report.isRising ? `▲ ${book ? book.ui.risingWord : 'rising'}` : `▼ ${book ? book.ui.fallingWord : 'falling'}`}
+            {report.isRising ? `▲ ${book.ui.risingWord}` : `▼ ${book.ui.fallingWord}`}
           </span>
         </span>
         {report.recommendedWindow && (
           <span className="bg-emerald-950/40 border border-emerald-800/60 rounded-lg px-2 py-1 text-emerald-300">
-            {book ? book.ui.bestSlackWord : 'Best slack water'} {report.recommendedWindow.startLabel}–{report.recommendedWindow.endLabel}
+            {book.ui.bestSlackWord} {report.recommendedWindow.startLabel}–{report.recommendedWindow.endLabel}
           </span>
         )}
       </div>
@@ -52,10 +52,10 @@ export const TideTable: React.FC<TideTableProps> = ({ report, compact = false, b
       <table className="w-full text-[11px]">
         <thead>
           <tr className="text-slate-500 text-left">
-            <th className="font-medium pb-1">{book ? book.ui.tideEventWord : 'Event'}</th>
-            <th className="font-medium pb-1">{book ? book.ui.tideTimeWord : 'Time'}</th>
-            <th className="font-medium pb-1 text-right">{book ? book.ui.tideHeightWord : 'Height'}</th>
-            <th className="font-medium pb-1 text-right">{book ? book.ui.tideCurrentWord : 'Current'}</th>
+            <th className="font-medium pb-1">{book.ui.tideEventWord}</th>
+            <th className="font-medium pb-1">{book.ui.tideTimeWord}</th>
+            <th className="font-medium pb-1 text-right">{book.ui.tideHeightWord}</th>
+            <th className="font-medium pb-1 text-right">{book.ui.tideCurrentWord}</th>
           </tr>
         </thead>
         <tbody>
@@ -68,7 +68,7 @@ export const TideTable: React.FC<TideTableProps> = ({ report, compact = false, b
       {report.recommendedWindow && !compact && (
         <p className="text-[10px] text-slate-400 flex items-start gap-1.5 pt-1 border-t border-slate-800">
           <Clock className="w-3 h-3 mt-0.5 shrink-0 text-emerald-400" />
-          <span>{book ? localizeTideReason(report.recommendedWindow.reason, book) : report.recommendedWindow.reason}</span>
+          <span>{localizeTideReason(report.recommendedWindow.reason, book)}</span>
         </p>
       )}
 
@@ -77,12 +77,12 @@ export const TideTable: React.FC<TideTableProps> = ({ report, compact = false, b
   );
 };
 
-const TideRow: React.FC<{ event: TidalData; book?: Phrasebook }> = ({ event, book }) => {
+const TideRow: React.FC<{ event: TidalData; book: Phrasebook }> = ({ event, book }) => {
   const high = event.type === 'HIGH';
   return (
     <tr className="border-t border-slate-800/60">
       <td className={`py-1 font-semibold ${high ? 'text-rose-300' : 'text-sky-300'}`}>
-        {high ? (book ? book.ui.tideHighWord : 'High') : book ? book.ui.tideLowWord : 'Low'}
+        {high ? (book.ui.tideHighWord) : book.ui.tideLowWord}
       </td>
       <td className="py-1 text-slate-300 font-mono">{event.time}</td>
       <td className="py-1 text-right text-slate-50 font-mono">{event.heightMeters.toFixed(2)} m</td>

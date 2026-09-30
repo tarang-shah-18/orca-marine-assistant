@@ -48,7 +48,20 @@ import { collectEvidence, collectSources, synthesizeOffline } from './synthesize
  * ------------------------------------------------------------------ */
 
 export const AGENT_REGISTRY_IMPL: Record<AgentType, AgentDefinition> = {
-  PLANNER_AGENT: { type: 'PLANNER_AGENT', run: () => ({ status: 'OK', findings: [], summary: 'Planning is handled by the runtime.', requestedAgents: [], dataSources: [] }) },
+  // The planner is not a runtime agent: `orchestrate()` builds the task graph
+  // itself, so this entry exists only to keep `AgentType` total and to give the
+  // registry a definition for the type. It must never produce a finding, because
+  // `collectRequested` deletes it before any follow-up round.
+  PLANNER_AGENT: {
+    type: 'PLANNER_AGENT',
+    run: (context) => ({
+      status: 'OK',
+      findings: [],
+      summary: context.book.ui.plannerRuntimeWord,
+      requestedAgents: [],
+      dataSources: [],
+    }),
+  },
   GIS_AGENT: gisAgent,
   PFZ_AGENT: pfzAgent,
   WEATHER_AGENT: weatherAgent,
@@ -426,10 +439,12 @@ export async function orchestrate(
     emit({ type: 'done', result });
     return { result, memory: nextMemory };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown orchestration failure';
+    const book = getPhrasebook(preferred);
+    // A non-Error throw is a programmer bug rather than bad input, but the
+    // message is put on screen, so it is written in the user's language.
+    const message = error instanceof Error ? error.message : book.ui.errOrchestrationWord;
     emit({ type: 'error', message });
 
-    const book = getPhrasebook(preferred);
     const result: OrchestrationResult = {
       answer: `${book.intro}\n\n${book.disclaimer}`,
       recommendation: book.recommendations.generic,
@@ -439,7 +454,7 @@ export async function orchestrate(
         intent: 'GENERAL_MARINE',
         intentConfidence: 0,
         horizon: 'TODAY',
-        reasoning: `Planning failed: ${message}`,
+        reasoning: `${book.ui.errPlanningWord}: ${message}`,
         steps: [],
         agents: [],
         followUps: [],

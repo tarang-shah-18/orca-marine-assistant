@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import { AGENT_REGISTRY, HarborLocation, LanguageOption, SUPPORTED_LANGUAGES } from '../types';
 import { DATA_CYCLE, HARBORS, VESSEL_PROFILES } from '../core/dataset';
-import { getPhrasebook } from '../core/i18n';
+import { getPhrasebook, fillTemplate } from '../core/i18n';
+import { codeText } from './LocalizedCode';
 import { engineStatus } from '../services/orcaApi';
 import type { EngineStatus } from '../services/orcaApi';
 
@@ -74,6 +75,11 @@ export const InfoScreen: React.FC<InfoScreenProps> = ({
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div>
+          {/* Deliberately verbatim: ORCA is the product name, "SIH 2026" the
+              event, "Problem ID 26176" the organiser's identifier, and the line
+              below names the submitting institution and the submission's own
+              technology bucket. Translating an identifier or an organisation's
+              name would make it harder to match against the form, not easier. */}
           <h2 className="font-bold text-sm text-slate-50">ORCA — SIH 2026, Problem ID 26176</h2>
           <p className="text-[10px] text-slate-400">
             ISRO / Department of Space · Software · Space Technology
@@ -86,24 +92,21 @@ export const InfoScreen: React.FC<InfoScreenProps> = ({
         <div className="bg-gradient-to-r from-cyan-950 to-blue-950 border border-cyan-500/50 rounded-2xl p-4">
           <div className="inline-flex items-center gap-1.5 text-xs font-bold text-cyan-300">
             <FileCode2 className="w-4 h-4" />
-            <span>Android build &amp; source</span>
+            <span>{ui.infoBuildHubWord}</span>
           </div>
-          <h3 className="font-extrabold text-sm text-slate-50 mt-0.5">APK &amp; deployment guide</h3>
-          <p className="text-[11px] text-slate-300 mt-1 leading-snug">
-            Expo React Native client, the TypeScript agent engine and the Express API — with the
-            commands to run and package each one.
-          </p>
+          <h3 className="font-extrabold text-sm text-slate-50 mt-0.5">{ui.infoApkGuideWord}</h3>
+          <p className="text-[11px] text-slate-300 mt-1 leading-snug">{ui.infoApkGuideBodyWord}</p>
           <button
             onClick={onOpenApkModal}
             className="mt-3 w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2"
           >
-            Open build instructions
+            {ui.infoOpenBuildWord}
             <ExternalLink className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Engine status */}
-        <Section icon={<Cpu className="w-4 h-4" />} title="Engine status">
+        <Section icon={<Cpu className="w-4 h-4" />} title={ui.infoEngineStatusWord}>
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-[11px]">
               {status?.offline ? (
@@ -112,32 +115,30 @@ export const InfoScreen: React.FC<InfoScreenProps> = ({
                 <Server className="w-4 h-4 text-emerald-400" />
               )}
               <span className="text-slate-300">
-                {status?.offline
-                  ? 'In-browser engine — the API is unreachable, so the same agents are running locally.'
-                  : 'Server connected — agents running on the Node engine.'}
+                {status?.offline ? ui.infoBrowserEngineWord : ui.infoServerConnectedWord}
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-1.5">
-              <Stat label="Version" value={status?.version ?? '—'} />
+              <Stat label={ui.infoVersionWord} value={status?.version ?? '—'} />
               <Stat
-                label="AI layer"
-                value={status?.ai.configured ? status.ai.model : 'deterministic'}
+                label={ui.infoAiLayerWord}
+                value={status?.ai.configured ? status.ai.model : ui.infoDeterministicWord}
                 tone={status?.ai.configured ? 'text-violet-300' : 'text-cyan-300'}
               />
               <Stat
-                label="Sessions"
+                label={ui.infoSessionsWord}
                 value={
                   status
                     ? status.offline
-                      ? 'local'
+                      ? ui.infoLocalWord
                       : String(status.sessions ?? 0)
                     : '—'
                 }
               />
               <Stat
-                label="Reference cycle"
-                value={status?.dataCycle?.label ?? (status?.offline ? 'bundled snapshot' : '—')}
+                label={ui.infoReferenceCycleWord}
+                value={status?.dataCycle?.label ?? (status?.offline ? ui.infoBundledSnapshotWord : '—')}
               />
             </div>
 
@@ -156,21 +157,18 @@ export const InfoScreen: React.FC<InfoScreenProps> = ({
 
             {status && !status.ai.configured && (
               <p className="text-[10px] text-slate-500 leading-snug">
-                No <code className="text-slate-400">GEMINI_API_KEY</code> set. ORCA is fully
-                functional without it — the optional model only rewrites the plan rationale and the
-                answer prose, and can never add or remove a safety-critical agent.
+                {codeText(ui.infoNoApiKeyWord, ['GEMINI_API_KEY'], 'text-slate-400')}
               </p>
             )}
           </div>
         </Section>
 
         {/* Agent roster */}
-        <Section icon={<Bot className="w-4 h-4" />} title={`Agent roster (${agents.length})`}>
-          <p className="text-[11px] text-slate-400 leading-snug">
-            A planner decomposes each question into a task graph and selects a subset of these
-            specialists. They publish typed findings to a shared blackboard, any agent may request
-            collaboration from a peer, and a critic audits the synthesised answer before it is shown.
-          </p>
+        <Section
+          icon={<Bot className="w-4 h-4" />}
+          title={fillTemplate(ui.infoRosterWord, { n: agents.length })}
+        >
+          <p className="text-[11px] text-slate-400 leading-snug">{ui.infoRosterBodyWord}</p>
           <div className="space-y-1.5">
             {agents.map((agent) => (
               <div
@@ -201,34 +199,42 @@ export const InfoScreen: React.FC<InfoScreenProps> = ({
         </Section>
 
         {/* Coverage */}
-        <Section icon={<Network className="w-4 h-4" />} title="Coverage">
+        <Section icon={<Network className="w-4 h-4" />} title={ui.infoCoverageWord}>
           <div className="space-y-1.5 text-[11px]">
             <Row icon={<Globe className="w-3.5 h-3.5" />}>
-              <strong className="text-slate-200">{SUPPORTED_LANGUAGES.length} languages</strong> —
-              {', '}
+              <strong className="text-slate-200">
+                {fillTemplate(ui.infoLanguagesWord, { n: SUPPORTED_LANGUAGES.length })}
+              </strong>
+              {' — '}
               {SUPPORTED_LANGUAGES.map((lang) => lang.nativeLabel).join(' · ')}
             </Row>
             <Row icon={<MapPin className="w-3.5 h-3.5" />}>
-              <strong className="text-slate-200">{HARBORS.length} Indian fishing harbours</strong> —
-              {', '}
+              <strong className="text-slate-200">
+                {fillTemplate(ui.infoHarboursWord, { n: HARBORS.length })}
+              </strong>
+              {' — '}
               {HARBORS.map((h) => h.shortName).join(', ')}
             </Row>
             <Row icon={<Database className="w-3.5 h-3.5" />}>
-              <strong className="text-slate-200">{VESSEL_PROFILES.length} vessel profiles</strong> —
-              route limits, sea-keeping and speed are evaluated per vessel class.
+              <strong className="text-slate-200">
+                {fillTemplate(ui.infoVesselProfilesWord, { n: VESSEL_PROFILES.length })}
+              </strong>{' '}
+              — {ui.infoVesselBodyWord}
             </Row>
             <Row icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
-              <strong className="text-slate-200">Reference cycle</strong> — {DATA_CYCLE.label}, aligned
-              to a {DATA_CYCLE.cycle} model run across {DATA_CYCLE.sources.length} source products.
+              <strong className="text-slate-200">{ui.infoReferenceCycleWord}</strong> —{' '}
+              {DATA_CYCLE.label},{' '}
+              {fillTemplate(ui.infoCycleBodyWord, {
+                cycle: DATA_CYCLE.cycle,
+                sources: DATA_CYCLE.sources.length,
+              })}
             </Row>
           </div>
         </Section>
 
         {/* Base harbour */}
-        <Section icon={<MapPin className="w-4 h-4" />} title="Base harbour">
-          <p className="text-[11px] text-slate-400">
-            Every spatial calculation is anchored to this port unless a GPS fix is supplied.
-          </p>
+        <Section icon={<MapPin className="w-4 h-4" />} title={ui.infoBaseHarbourWord}>
+          <p className="text-[11px] text-slate-400">{ui.infoBaseHarbourBodyWord}</p>
           <div className="grid grid-cols-2 gap-1.5">
             {HARBORS.map((candidate) => (
               <button
@@ -248,19 +254,16 @@ export const InfoScreen: React.FC<InfoScreenProps> = ({
         </Section>
 
         {/* Acceptance */}
-        <Section icon={<MessageSquare className="w-4 h-4" />} title="Acceptance test">
+        <Section icon={<MessageSquare className="w-4 h-4" />} title={ui.infoAcceptanceWord}>
           <p className="text-[11px] text-slate-400 leading-snug">
-            The problem statement's eight capabilities are pre-loaded as real questions in all{' '}
-            {SUPPORTED_LANGUAGES.length} languages. Each is fed through the same pipeline as anything
-            you type — so tapping one is a live test of language detection, intent parsing, roster
-            selection and synthesis, not a scripted answer.
+            {fillTemplate(ui.infoAcceptanceBodyWord, { n: SUPPORTED_LANGUAGES.length })}
           </p>
           <button
             onClick={onOpenChat}
             className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center justify-center gap-2"
           >
             <MessageSquare className="w-4 h-4" />
-            Open the conversation in {currentLanguage.nativeLabel}
+            {fillTemplate(ui.infoOpenChatWord, { lang: currentLanguage.nativeLabel })}
           </button>
         </Section>
 
@@ -268,15 +271,9 @@ export const InfoScreen: React.FC<InfoScreenProps> = ({
         <div className="bg-amber-950/30 border border-amber-800/50 rounded-2xl p-4 space-y-2">
           <div className="flex items-center gap-2 font-bold text-xs text-amber-300">
             <OctagonAlert className="w-4 h-4" />
-            <span>Safety standard &amp; responsible AI</span>
+            <span>{ui.infoSafetyWord}</span>
           </div>
-          <p className="text-[11px] text-slate-300 leading-relaxed">
-            ORCA provides decision support. It never guarantees safety, and it never overrides an
-            official advisory. A dedicated critic agent re-reads every answer before it is shown,
-            removes over-confident phrasing, escalates any ORANGE or RED advisory, and appends the
-            deferral to IMD, INCOIS and port authority warnings. The vessel remains the master's
-            decision.
-          </p>
+          <p className="text-[11px] text-slate-300 leading-relaxed">{ui.infoSafetyBodyWord}</p>
         </div>
       </div>
     </div>

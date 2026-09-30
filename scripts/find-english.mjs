@@ -40,6 +40,16 @@ const RE_CAP = new RegExp('[A-Z]');
 /** `book ? book.ui.x : 'English fallback'` — the English default. */
 const RE_FALLBACK = new RegExp(":\\s*'([^']{3,})'", 'g');
 
+/**
+ * A ternary, as opposed to a question mark sitting inside the string itself.
+ * `{ q: 'Where is the nearest fishing zone from here?' }` is a canonical query
+ * *sent to the engine*, not chrome the user reads — intent detection is
+ * language-neutral by design, and the visible chip label is translated
+ * separately. Counting it as a leak buried the real findings under ~30 false
+ * positives, so the scanner now requires a `?` that is not inside a literal.
+ */
+const RE_TERNARY_QUESTION = new RegExp('\\?[^' + "'" + '"]');
+
 /** `KEY: 'English label'` inside a label map. */
 const RE_LABEL_ENTRY = new RegExp(":\\s*'([^']{3,})'", 'g');
 
@@ -72,6 +82,39 @@ function walk(dir, out) {
   return out;
 }
 
+/**
+ * The provenance and identifier boundary.
+ *
+ * These are the strings the scanner is *expected* to find, because they are not
+ * UI copy. Each entry is an exact match on the cleaned text plus the reason it
+ * stays English; adding to this list is a claim that has to be justified, and
+ * the unit tests assert that every entry still occurs in the source, so a
+ * deleted or reworded string cannot quietly keep its exemption.
+ *
+ * The rule behind the whole list: a translation is not allowed to rename an
+ * identifier or paraphrase somebody else's published words. So product and event
+ * names, the organiser's problem ID, the submitting institution, the names of
+ * published bulletins, and the provenance fields of the evidence ledger stay
+ * verbatim. Everything ORCA itself wrote — every label, heading, sentence and
+ * button — is translated into all eleven languages.
+ */
+const ALLOWED = new Map([
+  // The product, the event, and the organiser's own identifier. A judge matches
+  // these against the submission form; translating them makes that harder.
+  ['ORCA — SIH 2026, Problem ID 26176', 'product name + event + organiser problem ID'],
+  ['ORCA Marine Intelligence · SIH 2026 Problem 26176 · ISRO / Dept. of Space', 'footer attribution'],
+  ['SIH 2026 • Problem ID: 26176', 'event name + organiser problem ID'],
+
+  // The submitting institution and the submission's own technology bucket, as
+  // recorded on the form.
+  ['ISRO / Department of Space · Software · Space Technology', 'institution + technology bucket'],
+
+  // The published name of an external bulletin, and ORCA's own snapshot
+  // labels, which are the provenance field of an evidence row.
+  ['IMD Marine Weather Warning bulletin', 'published IMD bulletin name (provenance)'],
+  ['ORCA snapshot', 'evidence provenance field'],
+]);
+
 const findings = [];
 const files = walk(SRC, []);
 
@@ -86,6 +129,7 @@ for (const file of files) {
 
     const push = (kind, text) => {
       const t = clean(text);
+      if (ALLOWED.has(t)) return;
       if (looksLikeEnglish(t)) findings.push({ file: rel, line: idx + 1, kind, text: t });
     };
 
@@ -96,9 +140,8 @@ for (const file of files) {
       for (const m of line.matchAll(re)) push(attr, m[1]);
     }
 
-    for (const m of line.matchAll(RE_FALLBACK)) {
-      // Only a ternary fallback is a bug; an ordinary `: 'value'` is data.
-      if (line.indexOf('?') !== -1) push('fallback', m[1]);
+    if (RE_TERNARY_QUESTION.test(line)) {
+      for (const m of line.matchAll(RE_FALLBACK)) push('fallback', m[1]);
     }
 
     if (RE_LABEL_ENTRY.test(line) && /[A-Z_]{4,}\s*:/.test(line)) {
@@ -113,7 +156,8 @@ for (const f of findings) {
   byFile.get(f.file).push(f);
 }
 
-console.log('\nEnglish-leakage scan — ' + findings.length + ' candidate(s)\n');
+console.log('\nEnglish-leakage scan — ' + findings.length + ' candidate(s)');
+console.log('  (the provenance/identifier allowlist holds ' + ALLOWED.size + ' documented exemption(s))\n');
 
 const sorted = Array.from(byFile.entries()).sort((a, b) => b[1].length - a[1].length);
 for (const entry of sorted) {

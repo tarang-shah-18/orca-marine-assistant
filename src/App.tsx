@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppShell, ViewId } from './components/AppShell';
 import { ChatScreen } from './components/ChatScreen';
 import { MapScreen } from './components/MapScreen';
@@ -16,6 +16,7 @@ import {
   SUPPORTED_LANGUAGES,
 } from './types';
 import type { LatLon } from './core/geo';
+import { getPhrasebook } from './core/i18n';
 import { HARBORS, HARBOR_BY_ID } from './core/dataset';
 import {
   engineStatus,
@@ -71,6 +72,10 @@ export default function App() {
   const [theme, setTheme] = useState<ThemeMode>(loadTheme);
   const [view, setView] = useState<ViewId>('dashboard');
   const [currentLanguage, setCurrentLanguage] = useState<LanguageOption>(SUPPORTED_LANGUAGES[0]);
+  // One phrasebook per render pass. Screens take it as a required prop rather
+  // than looking it up themselves, so a screen cannot silently disagree with
+  // the shell about which language it is rendering.
+  const book = useMemo(() => getPhrasebook(currentLanguage.code), [currentLanguage.code]);
   const [harbor, setHarbor] = useState<HarborLocation>(HARBOR_BY_ID.mumbai ?? HARBORS[0]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [brief, setBrief] = useState<SituationBrief | null>(null);
@@ -313,7 +318,9 @@ export default function App() {
         />
       )}
 
-      {isApkModalOpen && <ApkExportModal onClose={() => setIsApkModalOpen(false)} />}
+      {isApkModalOpen && (
+        <ApkExportModal onClose={() => setIsApkModalOpen(false)} book={book} />
+      )}
     </AppShell>
   );
 }

@@ -15,7 +15,7 @@ import { localizeRouteReason } from '../core/localize';
 interface RouteCardProps {
   route?: RouteData;
   compact?: boolean;
-  book?: Phrasebook;
+  book: Phrasebook;
 }
 
 const ClockIcon: React.ReactNode = (
@@ -37,7 +37,7 @@ export const RouteCard: React.FC<RouteCardProps> = ({ route, compact = false, bo
       <div className="flex items-center gap-2 flex-wrap">
         <span className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-300">
           <RouteIcon className="w-3.5 h-3.5" />
-          <span>{book ? book.ui.safestCorridorWord : 'Safest corridor'}</span>
+          <span>{book.ui.safestCorridorWord}</span>
         </span>
         <span className="text-[10px] text-slate-500">
           {route.origin.name} → {route.destination.name}
@@ -56,12 +56,12 @@ export const RouteCard: React.FC<RouteCardProps> = ({ route, compact = false, bo
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <Metric icon={<RouteIcon className="w-3 h-3" />} label={book ? book.ui.distanceWord : 'Distance'} value={`${route.totalDistanceKm} km`} />
+        <Metric icon={<RouteIcon className="w-3 h-3" />} label={book.ui.distanceWord} value={`${route.totalDistanceKm} km`} />
         {/* `ClockIcon` below is a pre-rendered element, not a component, so it
             is passed through as `{ClockIcon}` — `<ClockIcon />` would ask React
             to call a ReactNode. */}
         <Metric icon={ClockIcon} label="ETA" value={route.estimatedTimeHours} />
-        <Metric icon={<Gauge className="w-3 h-3" />} label={book ? book.ui.safetyWord : 'Safety'} value={`${route.safetyScore}/100`} />
+        <Metric icon={<Gauge className="w-3 h-3" />} label={book.ui.safetyWord} value={`${route.safetyScore}/100`} />
       </div>
 
       <p className="text-[11px] text-slate-300 leading-snug">{route.recommendation}</p>
@@ -118,7 +118,7 @@ export const RouteCard: React.FC<RouteCardProps> = ({ route, compact = false, bo
       {route.alternatives.length > 0 && !compact && (
         <div className="pt-1 border-t border-slate-800">
           <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">
-            {book ? book.ui.rejectedAlternativesWord : 'Rejected alternatives'}
+            {book.ui.rejectedAlternativesWord}
           </div>
           {route.alternatives.map((alt) => (
             <div key={alt.id} className="text-[10px] text-slate-500">
@@ -143,11 +143,11 @@ const Metric: React.FC<{ icon: React.ReactNode; label: string; value: string }> 
 );
 
 /** Compact one-liner used inside a chat bubble. */
-export const RouteSummary: React.FC<{ route: RouteData; book?: Phrasebook }> = ({ route, book }) => (
+export const RouteSummary: React.FC<{ route: RouteData; book: Phrasebook }> = ({ route, book }) => (
   <div className="flex items-center gap-2 text-[11px]">
     <Anchor className="w-3.5 h-3.5 text-emerald-400" />
     <span className="text-slate-300">
-      {route.totalDistanceKm} km · {route.estimatedTimeHours} · {book ? book.ui.safetyWord : 'safety'} {route.safetyScore}/100
+      {route.totalDistanceKm} km · {route.estimatedTimeHours} · {book.ui.safetyWord} {route.safetyScore}/100
     </span>
   </div>
 );

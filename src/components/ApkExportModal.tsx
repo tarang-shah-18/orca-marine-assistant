@@ -5,6 +5,21 @@
  * true: the commands run, the endpoints exist, and the file tree is the
  * repository as it actually is. A judge who copies from here must not hit a
  * wall.
+ *
+ * LOCALISATION BOUNDARY. All navigational chrome — titles, headings, step
+ * captions, button labels, the prose ORCA wrote around each block — is
+ * translated into all eleven languages. The *payloads* are not, and cannot be:
+ *
+ *   - shell commands (`npx eas build -p android --profile production`) have no
+ *     translation and would be broken by one;
+ *   - file paths (`mobile/src/services/api.js`, `src/agents/routeAgent.ts`) are
+ *     repository identifiers, not prose;
+ *   - the endpoint table's one-line descriptions are API reference, the same
+ *     category as the published IMD/INCOIS bulletins ORCA quotes verbatim.
+ *
+ * A judge reads the payloads in English and navigates the hub in their own
+ * language. That is the same rule the rest of the product follows: identifiers
+ * and quoted source material stay verbatim, ORCA's own words get translated.
  */
 
 import React, { useState } from 'react';
@@ -17,23 +32,44 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
+import { Phrasebook } from '../core/i18n';
+import { codeText } from './LocalizedCode';
 
 interface ApkExportModalProps {
   onClose: () => void;
+  /**
+   * Required, not optional. An optional phrasebook with an English `? :`
+   * fallback once let a whole screen render English in all eleven languages;
+   * making it required turns that bug class into a compile error.
+   */
+  book: Phrasebook;
 }
 
 type TabId = 'build' | 'engine' | 'structure' | 'judge_demo';
 
-const TABS: Array<{ id: TabId; label: string; Icon: React.ComponentType<{ className?: string }> }> = [
-  { id: 'build', label: 'APK Build', Icon: Smartphone },
-  { id: 'engine', label: 'Engine & API', Icon: Server },
-  { id: 'structure', label: 'Folder Structure', Icon: FolderTree },
-  { id: 'judge_demo', label: '3-Min Demo Script', Icon: Terminal },
+/** Tab captions live in the phrasebook, so the table is built per language. */
+const tabCaption = (
+  ui: Phrasebook['ui'],
+  id: TabId,
+): string =>
+  ({
+    build: ui.apkTabBuildWord,
+    engine: ui.apkTabEngineWord,
+    structure: ui.apkTabStructureWord,
+    judge_demo: ui.apkTabDemoWord,
+  })[id];
+
+const TABS: Array<{ id: TabId; Icon: React.ComponentType<{ className?: string }> }> = [
+  { id: 'build', Icon: Smartphone },
+  { id: 'engine', Icon: Server },
+  { id: 'structure', Icon: FolderTree },
+  { id: 'judge_demo', Icon: Terminal },
 ];
 
-export const ApkExportModal: React.FC<ApkExportModalProps> = ({ onClose }) => {
+export const ApkExportModal: React.FC<ApkExportModalProps> = ({ onClose, book }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('build');
+  const ui = book.ui;
 
   const copyToClipboard = (text: string, key: string) => {
     void navigator.clipboard.writeText(text);
@@ -232,7 +268,7 @@ safety-critical one.`;
       ) : (
         <Copy className="w-3.5 h-3.5" />
       )}
-      <span>{copiedKey === id ? 'Copied' : 'Copy'}</span>
+      <span>{copiedKey === id ? ui.copiedWord : ui.copyWord}</span>
       <span className="sr-only">{label}</span>
     </button>
   );
@@ -247,18 +283,14 @@ safety-critical one.`;
               <Smartphone className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-extrabold text-base sm:text-lg text-slate-50">
-                ORCA Build &amp; Demonstration Hub
-              </h2>
-              <p className="text-xs text-slate-400">
-                One TypeScript agent engine · web client + Android APK
-              </p>
+              <h2 className="font-extrabold text-base sm:text-lg text-slate-50">{ui.apkTitleWord}</h2>
+              <p className="text-xs text-slate-400">{ui.apkSubtitleWord}</p>
             </div>
           </div>
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-50"
-            aria-label="Close"
+            aria-label={ui.closeWord}
           >
             <X className="w-5 h-5" />
           </button>
@@ -266,7 +298,7 @@ safety-critical one.`;
 
         {/* Tabs */}
         <div className="flex gap-2 py-3 border-b border-slate-800 overflow-x-auto shrink-0 text-xs font-semibold">
-          {TABS.map(({ id, label, Icon }) => (
+          {TABS.map(({ id, Icon }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
@@ -277,7 +309,7 @@ safety-critical one.`;
               }`}
             >
               <Icon className="w-4 h-4" />
-              <span>{label}</span>
+              <span>{tabCaption(ui, id)}</span>
             </button>
           ))}
         </div>
@@ -288,26 +320,19 @@ safety-critical one.`;
             <div className="space-y-4">
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-bold text-cyan-400 text-sm">
-                    1. Standalone APK with Expo EAS cloud build
-                  </span>
-                  <CopyButton value={EAS_BUILD_COMMANDS} id="eas" label="APK build commands" />
+                  <span className="font-bold text-cyan-400 text-sm">{ui.apkStep1Word}</span>
+                  <CopyButton value={EAS_BUILD_COMMANDS} id="eas" label={ui.copyApkBuildWord} />
                 </div>
                 <pre className="text-slate-300 font-mono text-[11px] overflow-x-auto whitespace-pre p-2 bg-slate-900 rounded-lg">
                   {EAS_BUILD_COMMANDS}
                 </pre>
-                <p className="text-[11px] text-slate-400">
-                  EAS prints a download link and a QR code for a directly installable APK — no
-                  Android Studio, no local SDK, nothing to configure on the receiving phone.
-                </p>
+                <p className="text-[11px] text-slate-400">{ui.apkStep1BodyWord}</p>
               </div>
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-bold text-emerald-400 text-sm">
-                    2. Instant testing on a physical phone with Expo Go
-                  </span>
-                  <CopyButton value={EXPO_GO_COMMANDS} id="expo" label="Expo Go commands" />
+                  <span className="font-bold text-emerald-400 text-sm">{ui.apkStep2Word}</span>
+                  <CopyButton value={EXPO_GO_COMMANDS} id="expo" label={ui.copyExpoGoWord} />
                 </div>
                 <pre className="text-slate-300 font-mono text-[11px] overflow-x-auto whitespace-pre p-2 bg-slate-900 rounded-lg">
                   {EXPO_GO_COMMANDS}
@@ -315,15 +340,9 @@ safety-critical one.`;
               </div>
 
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <span className="font-bold text-amber-400 text-sm block">
-                  3. Pointing the APK at a hosted engine
-                </span>
+                <span className="font-bold text-amber-400 text-sm block">{ui.apkStep3Word}</span>
                 <p className="text-slate-300">
-                  The address lives in exactly one place,{' '}
-                  <code className="text-cyan-300 bg-slate-900 px-1 py-0.5 rounded">
-                    mobile/src/services/api.js
-                  </code>
-                  , and reads an environment variable first:
+                  {codeText(ui.apkStep3BodyWord, ['mobile/src/services/api.js'])}
                 </p>
                 <div className="p-2 bg-slate-900 rounded-lg font-mono text-[11px] text-slate-300">
                   {`export const BASE_URL =
@@ -331,16 +350,11 @@ safety-critical one.`;
   (Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000');`}
                 </div>
                 <p className="text-slate-300">
-                  For a build-time target, set it in{' '}
-                  <code className="text-cyan-300 bg-slate-900 px-1 py-0.5 rounded">eas.json</code>{' '}
-                  as{' '}
-                  <code className="text-emerald-300 bg-slate-900 px-1 py-0.5 rounded">
-                    EXPO_PUBLIC_ORCA_API=https://your-host
-                  </code>
-                  . <span className="text-slate-400">
-                    If the engine is unreachable the app says so plainly — it never substitutes a
-                    fabricated forecast.
-                  </span>
+                  {codeText(ui.apkStep3Body2Word, [
+                    'eas.json',
+                    'EXPO_PUBLIC_ORCA_API=https://your-host',
+                  ])}{' '}
+                  <span className="text-slate-400">{ui.apkStep3NoteWord}</span>
                 </p>
               </div>
             </div>
@@ -350,17 +364,14 @@ safety-critical one.`;
             <div className="space-y-4">
               <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-bold text-cyan-400 text-sm">
-                    Running the agent engine
-                  </span>
-                  <CopyButton value={ENGINE_COMMANDS} id="engine" label="Engine commands" />
+                  <span className="font-bold text-cyan-400 text-sm">{ui.apkEngineHeadingWord}</span>
+                  <CopyButton value={ENGINE_COMMANDS} id="engine" label={ui.copyEngineWord} />
                 </div>
                 <pre className="text-slate-300 font-mono text-[11px] overflow-x-auto whitespace-pre p-2 bg-slate-900 rounded-lg">
                   {ENGINE_COMMANDS}
                 </pre>
                 <p className="text-[11px] text-slate-400">
-                  <code className="text-emerald-300">GEMINI_API_KEY</code> is optional. Without it the
-                  deterministic engine still plans, reasons, synthesises and audits every answer.
+                  {codeText(ui.apkEngineKeyNoteWord, ['GEMINI_API_KEY'], 'text-emerald-300')}
                 </p>
               </div>
 
@@ -389,8 +400,8 @@ safety-critical one.`;
           {activeTab === 'structure' && (
             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <span className="font-bold text-slate-50 text-sm block">Project organization</span>
-                <CopyButton value={PROJECT_TREE} id="tree" label="Folder structure" />
+                <span className="font-bold text-slate-50 text-sm block">{ui.apkProjectOrgWord}</span>
+                <CopyButton value={PROJECT_TREE} id="tree" label={ui.copyFolderWord} />
               </div>
               <pre className="text-cyan-300 font-mono text-[11px] overflow-x-auto whitespace-pre p-3 bg-slate-900 rounded-xl leading-relaxed">
                 {PROJECT_TREE}
@@ -401,10 +412,8 @@ safety-critical one.`;
           {activeTab === 'judge_demo' && (
             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <span className="font-bold text-cyan-400 text-sm">
-                  Smart India Hackathon demonstration script
-                </span>
-                <CopyButton value={DEMO_FLOW_GUIDE} id="script" label="Demo script" />
+                <span className="font-bold text-cyan-400 text-sm">{ui.apkDemoHeadingWord}</span>
+                <CopyButton value={DEMO_FLOW_GUIDE} id="script" label={ui.copyDemoWord} />
               </div>
               <pre className="text-slate-300 font-mono text-[11px] overflow-x-auto whitespace-pre p-3 bg-slate-900 rounded-xl leading-relaxed">
                 {DEMO_FLOW_GUIDE}
@@ -415,12 +424,14 @@ safety-critical one.`;
 
         {/* Footer */}
         <div className="pt-3 border-t border-slate-800 flex items-center justify-between shrink-0 text-xs">
+          {/* Deliberately verbatim: the event name and the organiser's problem
+              identifier, which a judge matches against the submission form. */}
           <span className="text-slate-400">SIH 2026 • Problem ID: 26176</span>
           <button
             onClick={onClose}
             className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-50 rounded-xl font-semibold cursor-pointer"
           >
-            Close
+            {ui.closeWord}
           </button>
         </div>
       </div>

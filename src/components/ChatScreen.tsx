@@ -659,7 +659,7 @@ const OrcaBubble: React.FC<OrcaBubbleProps> = ({
         <div className="px-3.5 pb-3 space-y-2.5">
           {result.routeData ? <RouteCard route={result.routeData} compact book={book} /> : null}
           {result.tideReport ? <TideTable report={result.tideReport} compact book={book} /> : null}
-          {result.geofencingData ? <GeofencePanel data={result.geofencingData} compact /> : null}
+          {result.geofencingData ? <GeofencePanel data={result.geofencingData} compact book={book} /> : null}
           {result.riskTrajectory ? (
             <RiskStrip trajectory={result.riskTrajectory} book={book} />
           ) : null}

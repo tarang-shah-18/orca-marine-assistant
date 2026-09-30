@@ -41,7 +41,8 @@ import {
   upstreamFailures,
 } from '../src/core/live';
 import type { MarineAlert } from '../src/types';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
 
 let passed = 0;
 let failed = 0;
@@ -623,6 +624,127 @@ function approx(a: number, b: number, tolerance: number): boolean {
     'regression · no label comparison against an English literal remains',
     !/\.label\s*===\s*'[a-z ]+'/i.test(histSrc),
     (histSrc.match(/\.label\s*===\s*'[a-z ]+'/gi) ?? []).join(', '),
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Section 9 — regression: no English can reach the UI through a fallback
+ *
+ * The second localisation bug class. A component that takes an optional
+ * `book` prop and writes `book ? book.ui.x : 'English'` type-checks perfectly,
+ * passes the answer-level residue check (the engine was never involved), and
+ * renders English in all eleven languages the moment one call site forgets to
+ * pass the prop. It happened for real in `ResearcherDashboard.tsx`.
+ *
+ * The cure is structural rather than vigilance: `book` is a *required* prop on
+ * every component that renders phrasebook text, so a forgotten prop is a
+ * compile error. These tests assert both halves of that contract — the ternary
+ * shape is gone, and the props really are required — so the cure cannot be
+ * quietly reverted by an "optional prop is friendlier" refactor.
+ * ------------------------------------------------------------------ */
+
+{
+  const COMPONENT_DIR = new URL('../src/components/', import.meta.url).pathname;
+  const files: string[] = [];
+  const collect = (dir: string): void => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) collect(p);
+      else if (p.endsWith('.tsx')) files.push(p);
+    }
+  };
+  collect(COMPONENT_DIR);
+
+  // Every component that reaches for `book.ui` / `book.labels` must obtain a
+  // phrasebook by one of exactly two routes, neither of which can be undefined:
+  //
+  //   1. a required `book: Phrasebook` prop — no `?`, no default value; or
+  //   2. `const book = getPhrasebook(...)` derived from the language it is given.
+  //
+  // Anything else (an optional prop, a prop defaulted to `undefined`) is the bug.
+  const unbooked: string[] = [];
+  const englishTernary: string[] = [];
+
+  for (const file of files) {
+    const source = readFileSync(file, 'utf8');
+    const name = relative(COMPONENT_DIR, file);
+
+    if (/\bbook\.(ui|labels)\b/.test(source)) {
+      const requiredProp =
+        /\bbook\s*:\s*Phrasebook/.test(source) && !/\bbook\?\s*:/.test(source);
+      const derived = /(?:const|let)\s+book\s*=\s*(?:useMemo\(\s*\(\)\s*=>\s*)?getPhrasebook\(/.test(
+        source,
+      );
+      if (!requiredProp && !derived) unbooked.push(name);
+    }
+
+    // `book ? book.ui.x : 'English'` — an English string on the losing branch of
+    // a phrasebook ternary. This is the exact shape that broke ResearcherDashboard.
+    for (const m of source.matchAll(
+      /book\s*\?\s*book\.(?:ui|labels)[\w.]+\s*:\s*'([^']{2,})'/g,
+    )) {
+      englishTernary.push(`${name}: ${m[1]}`);
+    }
+  }
+
+  check(
+    'regression · every phrasebook consumer gets its book from a required prop or getPhrasebook()',
+    unbooked.length === 0,
+    unbooked.join(', '),
+  );
+  check(
+    'regression · no `book ? book.ui.x : "English"` fallback remains in any component',
+    englishTernary.length === 0,
+    englishTernary.join(' | '),
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Section 10 — the provenance boundary is explicit and still true
+ *
+ * `scripts/find-english.mjs` carries an allowlist of strings that are expected
+ * to stay English — product names, the organiser's problem ID, published
+ * bulletin titles, evidence provenance fields. Each exemption is a claim about
+ * data provenance, so it is only allowed to stand while the string it exempts
+ * still exists. A reworded or deleted entry has to be re-justified rather than
+ * silently inheriting its exemption.
+ * ------------------------------------------------------------------ */
+
+{
+  const scanner = readFileSync(new URL('./find-english.mjs', import.meta.url), 'utf8');
+
+  const block = /const ALLOWED = new Map\(\[([\s\S]*?)\n\]\);/.exec(scanner);
+  check('regression · the scanner still declares an ALLOWED map', !!block, 'ALLOWED map not found');
+
+  const exemptions = block
+    ? [...block[1].matchAll(/\['([^']*)',\s*'([^']*)'\]/g)].map((m) => ({ text: m[1], reason: m[2] }))
+    : [];
+
+  check('regression · every exemption carries a written reason', exemptions.length > 0 &&
+    exemptions.every((e) => e.reason.trim().length > 10),
+    JSON.stringify(exemptions.filter((e) => e.reason.trim().length <= 10).map((e) => e.text)));
+
+  // Each exemption must still be present somewhere in src/, otherwise it is
+  // stale: the string it protects is gone and the exemption is just noise.
+  const sources: string[] = [];
+  const collectSrc = (dir: string): void => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) collectSrc(p);
+      else if (/\.(tsx?|mjs)$/.test(p)) sources.push(readFileSync(p, 'utf8'));
+    }
+  };
+  collectSrc(new URL('../src/', import.meta.url).pathname);
+
+  // The scanner truncates long findings for display, so compare on the
+  // distinctive head of each exemption rather than the whole string.
+  const stale = exemptions.filter(
+    (e) => !sources.some((s) => s.includes(e.text.slice(0, 28))),
+  );
+  check(
+    'regression · no allowlist exemption has gone stale',
+    stale.length === 0,
+    stale.map((e) => e.text).join(' | '),
   );
 }
 

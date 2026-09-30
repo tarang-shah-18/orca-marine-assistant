@@ -176,7 +176,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
       })
       .catch((cause: unknown) => {
         if (!cancelled) {
-          setError(cause instanceof Error ? cause.message : 'Could not load the marine picture.');
+          setError(cause instanceof Error ? cause.message : ui.mapLoadFailedWord);
         }
       })
       .finally(() => {
@@ -591,6 +591,11 @@ export const MapScreen: React.FC<MapScreenProps> = ({
         });
       // Meteorology reports direction *from* which the parcel moves; swing the
       // arrow 180° so it points the way the water is actually being pushed.
+      //
+      // The three-glyph badges (WND / SWL / CRT) stay language-neutral on
+      // purpose: they are drawn at 8px inside a fixed-width SVG chip, so a
+      // localised word cannot fit without clipping. The human-readable name for
+      // each badge is in the tooltip immediately beside it.
       if (windDeg != null) {
         L.marker([focusLat + 0.05, focusLon + 0.05], {
           icon: vectorIcon(windDeg + 180, '#fbbf24', 32, 'WND'),
@@ -598,7 +603,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           interactive: false,
         })
           .addTo(overlay)
-          .bindTooltip(`<b>Wind</b> ${bundle.weather.windSpeedKnots} kt ${bundle.weather.windDirection}`, {
+          .bindTooltip(`<b>${book.labels.wind}</b> ${bundle.weather.windSpeedKnots} kt ${bundle.weather.windDirection}`, {
             direction: 'right',
           });
       }
@@ -621,9 +626,10 @@ export const MapScreen: React.FC<MapScreenProps> = ({
           interactive: false,
         })
           .addTo(overlay)
-          .bindTooltip(`<b>Current</b> ${bundle.ocean.currentKnots} kt ${bundle.ocean.currentDirection}`, {
-            direction: 'right',
-          });
+          .bindTooltip(
+            `<b>${ui.currentWord}</b> ${bundle.ocean.currentKnots} kt ${bundle.ocean.currentDirection}`,
+            { direction: 'right' },
+          );
       }
     }
 

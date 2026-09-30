@@ -813,7 +813,10 @@ api.post('/chat', asyncRoute(async (req: Request, res: Response) => {
       timestamp: result.timestamp,
     });
   } catch (error) {
-    fail(res, 500, error instanceof Error ? error.message : 'Orchestration failed');
+    // The fallback only fires when the thrown value is not an Error, which in
+    // practice means a programmer bug rather than bad input — but it is shown on
+    // screen, so it is written in the caller's language.
+    fail(res, 500, error instanceof Error ? error.message : getPhrasebook(language).ui.errOrchestrationWord);
   }
 }));
 
@@ -923,7 +926,10 @@ api.post('/chat/stream', asyncRoute(async (req: Request, res: Response) => {
     });
     writeMemory(sessionId, nextMemory);
   } catch (error) {
-    send({ type: 'error', message: error instanceof Error ? error.message : 'Orchestration failed' });
+    send({
+      type: 'error',
+      message: error instanceof Error ? error.message : getPhrasebook(language).ui.errOrchestrationWord,
+    });
   } finally {
     dispose();
     res.removeListener('close', onClose);
@@ -951,7 +957,7 @@ api.get('/situation', asyncRoute(async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    fail(res, 500, error instanceof Error ? error.message : 'Situation report failed');
+    fail(res, 500, error instanceof Error ? error.message : getPhrasebook(language).ui.errSituationWord);
   }
 }));
 

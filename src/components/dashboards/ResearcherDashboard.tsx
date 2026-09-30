@@ -239,7 +239,7 @@ export const ResearcherDashboard: React.FC<DashboardProps> = ({
         <Panel title={ui.longRunOceanographyWord} icon={BarChart3} accent="cyan" loading={loading}>
           {history && history.visualizations.length > 0 ? (
             <div className="overflow-y-auto max-h-96">
-              <Charts visualizations={history.visualizations} />
+              <Charts visualizations={history.visualizations} book={book} />
             </div>
           ) : (
             <p className="text-xs text-slate-500">{ui.noVisualisationsWord}</p>
