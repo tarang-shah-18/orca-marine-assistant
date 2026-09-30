@@ -7,7 +7,7 @@ parked), or ⛔ blocked (needs an external source/key/licence that conflicts wit
 keyless/offline invariant).
 
 **Non-negotiable invariants for any change:**
-- Regression sweep stays green: `npm test` → **3306/3306**.
+- Regression sweep stays green: `npm test` → **3318/3318**.
 - All **11 languages** stay fully localised (add every new user-facing string to the
   phrasebook in `src/core/i18n.ts` + templates in `src/core/localize.ts`).
 - The engine stays **deterministic and keyless** (runs fully offline; a dead network must
@@ -63,10 +63,17 @@ Sizeable UI work, each deliberately parked; none affects engine correctness.
   in-browser offline (`orcaApi.ts`).
 - **3.3 Alert push notifications** — escalate when a harbour's headline advisory rises
   to ORANGE/RED or a geofence is approached.
-- **3.4 Live geofence alerts on GPS track** — drive `POST /api/geofence/check` per fix.
+- **3.4 Live geofence alerts on GPS track** — the continuous fix stream now exists
+  (`watchPosition` in `src/App.tsx`, which also anchors the situation report to the nearest
+  port and reconciles the client's selection to the engine's answer). What is still missing
+  is calling `POST /api/geofence/check` per fix and surfacing a boundary crossing.
 - **3.5 Multi-stop routes** — out-and-back legs with per-leg fuel/transit windows.
 - **3.6 Localised dates** — data-cycle chip and `localHourBand` windows render English
-  dates in all 11 languages; route through the phrasebook.
+  dates in all 11 languages; route through the phrasebook. Deliberately **not** a defect:
+  those stamps are the *provenance label* of the reference cycle and the tide table, in the
+  canonical `en-IN` IST format the bulletins themselves use, so the same cycle reads
+  identically in every language. The user-facing relative time ("Updated 4 min ago") *is*
+  translated, in all 11.
 - **3.7 Exportable situation report** — one-tap PDF/image for harbour masters/disaster cells.
 - **3.8 More harbours & community reports** — extend the 13-harbour gazetteer;
   fisher-submitted reports flagged `unverified`.
@@ -89,13 +96,15 @@ Sizeable UI work, each deliberately parked; none affects engine correctness.
 
 ## 5. Quality, tests & tooling (P2)
 
-- **5.1 Unit tests for core math** — ✅ **Done**. `scripts/unit-tests.ts` (33 checks,
+- **5.1 Unit tests for core math** — ✅ **Done**. `scripts/unit-tests.ts` (71 checks,
   fully offline): geodesy edges, advisory expiry/headline rules, i18n integrity across
-  all 11 languages, dataset sanity. Runs first on `npm test` (before the sweep); also
-  `npm run test:unit`.
+  all 11 languages, dataset sanity, the localisation invariants (no English fallback ternary,
+  no stale provenance exemption) and the freshness readout (age never understated, clock
+  pinned to IST, poll period equal to the engine's cache TTL). Runs first on `npm test`
+  (before the sweep); also `npm run test:unit`.
 - **5.2 Property tests for i18n** — 🕒 deferred.
 - **5.3 CI** — ✅ **Done**. `.github/workflows/ci.yml` ships (lint → unit tests → build →
-  start production server → 3306-check sweep) and activates on the first push.
+  start production server → 3318-check sweep) and activates on the first push.
 - **5.4 Sweep speed** — 🕒 sweep is ~35 s now; parallelising must keep assertions
   deterministic.
 - **5.5 Load test** — 🕒 verify `/api/chat` under ~20 concurrent turns keeps upstream

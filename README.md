@@ -178,7 +178,7 @@ middleware mode, so one command gives you the whole product with hot reload.
 | `npm start` | Serve `dist/` and `dist/server.cjs` from a single Node process |
 | `npm test` | Offline unit tests, then the full-surface regression sweep (engine, 11 languages, endpoints, SSE) |
 | `npm run test:unit` | Fast deterministic unit tests (geodesy, advisory expiry/headline rules, i18n integrity) — no server needed |
-| `npm run test:sweep` | The 3306-check integration sweep (start the server first) |
+| `npm run test:sweep` | The 3318-check integration sweep (start the server first) |
 | `npm run lint` | `tsc --noEmit` |
 | `npm run clean` | Remove `dist/` and stray server output |
 | `docker build -t orca .` | Two-stage container: Vite + esbuild build, production-only runtime image |
@@ -187,12 +187,15 @@ middleware mode, so one command gives you the whole product with hot reload.
 
 `npm test` runs the offline unit tests first (geodesy edges, advisory expiry and
 headline rules, i18n integrity across all 11 languages — `scripts/unit-tests.ts`), then
-the full-surface sweep (`scripts/test-sweep.ts`) — currently **3306 checks, all green**:
+the full-surface sweep (`scripts/test-sweep.ts`) — currently **3318 checks, all green**:
 
 - every harbour × intent battery through the **real** engine (no mocks),
 - the 8 canonical capabilities × all 11 languages,
 - every persona's quick asks and every vessel profile,
 - visualisation invariants (no render-blocking "contentless" layer),
+- **GPS anchoring** — a fix outranks the selected port, the engine agrees with
+  the client about which port is nearest, an unparseable fix falls back to the
+  selection rather than to a default,
 - every HTTP endpoint against the running server, including the SSE `/chat/stream`
   (asserts the `done` frame always arrives).
 
@@ -271,7 +274,7 @@ pm2 save && pm2 startup               # survive reboots
 Both paths harden the same way in code: security headers (+ strict CSP on the built
 client), per-request access log, `nosniff`/frame/referrer/policy headers, JSON errors for
 malformed bodies and unknown `/api` paths, graceful shutdown, docker healthchecks, and
-`.github/workflows/ci.yml` (lint → unit tests → build → 3306-check sweep) on every push.
+`.github/workflows/ci.yml` (lint → unit tests → build → 3318-check sweep) on every push.
 Tune `APP_URL` (CORS allowlist) and put TLS on a reverse proxy in front of the container;
 set `ORCA_TRUST_PROXY=1` there so the rate limiter sees real client IPs.
 
@@ -511,6 +514,35 @@ vectors and the animated scored corridor), **Info** (agent roster, engine status
 Charts are hand-rolled SVG rather than a charting library — it keeps the coastal-3G bundle
 small, which matters for the target device.
 
+#### Freshness, and knowing where the data came from
+
+Two properties a marine safety product cannot fake, both stated on screen:
+
+**The age of the data is always visible.** The header (and the footer on a phone, where
+the header has no room) carries a live IST clock and a "Updated *N* min ago" readout that
+ticks once a second. The prototype fetched once on mount and said nothing about it, which
+made a twenty-minute-old situation report look exactly like a fresh one — for a product
+used to decide whether to go out, silence is indistinguishable from safety. The readout
+never rounds an age *down*; a clock skewed into the future reads as "just now" rather than
+as a negative age.
+
+**The screen refreshes itself.** `useAutoRefresh` re-asks the engine every 12 minutes —
+deliberately the engine's own cache TTL, so a poll lands at the moment the answer could
+have changed. Polling faster returns an identical payload twelve times over and spends the
+free tier's request budget to do it. It also re-fetches the moment the tab becomes visible
+or connectivity returns, which is the case that matters most: a phone coming out of a pocket
+after an hour must not sit on an hour-old report for another twelve minutes.
+
+**GPS is a real anchor, not a badge.** `watchPosition`, not a one-shot fix — a boat moves,
+and asking once is a photograph of where it was when the button was pressed. The fix is
+forwarded to `/api/situation`, which resolves it to the nearest port and **reports the
+anchor it actually used**; the client then reconciles its own selection to that answer and
+shows the distance from the fix to the port. This is the part that matters: the prototype
+resolved a position, displayed it in a green dot, and then built the report for whichever
+port was selected, so a user could not tell a working feature from a broken one. Choosing
+a port by hand cancels the watcher, because an explicit choice should not be silently
+overridden thirty seconds later.
+
 ### Android (`mobile/`)
 
 Expo / React Native. Five screens: Home, Chat, Map, Conditions (tide + weather + sea +
@@ -571,7 +603,7 @@ ORCA is a decision-support prototype, and its honesty contract is enforced in co
 
 ## Production readiness — what's hardened, what's yours
 
-The engineering is production-shaped: **deterministic engine, 3306-check regression +
+The engineering is production-shaped: **deterministic engine, 3318-check regression +
 unit-test gate in CI, real multi-source live data with honest degraded fallbacks**, a
 hardened server (security headers, strict CSP on the built client, JSON 404/400/500 errors
 that never leak stack traces, per-IP chat rate limiting, SSE heartbeat with a stream

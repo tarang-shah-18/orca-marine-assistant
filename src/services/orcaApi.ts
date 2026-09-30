@@ -40,8 +40,11 @@ import {
   GEOFENCES,
   HARBORS,
   HARBOR_BY_ID,
+  findNearestHarbor,
   getPfzZonesNear,
 } from '../core/dataset';
+import { haversineKm, roundTo } from '../core/geo';
+import type { LatLon } from '../core/geo';
 import { getPhrasebook } from '../core/i18n';
 import { getLiveHotspotsNear } from '../core/dataAccess';
 import { pickHeadlineAlert } from '../core/alerts';
@@ -381,32 +384,95 @@ export async function orchestrateOffline(options: AskOptions): Promise<{
  * Proactive briefing
  * ------------------------------------------------------------------ */
 
+/**
+ * Which port the engine actually built the report about, and why.
+ *
+ * This is not decoration. The server resolves a GPS fix to the nearest harbour,
+ * which is frequently *not* the harbour the user has selected on screen, and the
+ * prototype simply assumed its own request had won. A user who turned location
+ * on and saw the badge light up while the dashboard kept describing the old port
+ * had no way to tell a stale render from a broken feature. The engine now
+ * reports the anchor it used, and the client reconciles its selection to it.
+ */
+export interface SituationAnchor {
+  harborId: string;
+  harborName: string;
+  source: 'gps' | 'selection';
+  /** Straight-line distance from the fix to the port it resolved to. */
+  distanceKm: number | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 export interface SituationOutcome {
   brief: SituationBrief;
   result: OrchestrationResult;
   offline: boolean;
+  /**
+   * When this payload was received, on the client's clock. Not the server's
+   * `timestamp`: the number a user reads as "updated" has to be measured from the
+   * moment their screen actually changed, otherwise a two-minute-old cached
+   * response would claim to be fresh.
+   */
+  receivedAt: number;
+  anchor: SituationAnchor | null;
 }
 
 /**
  * The banner on the home screen. Uses the same pipeline as the chat, so the
  * proactive card and a conversational answer can never contradict each other.
+ *
+ * A `fix` is sent when — and only when — the user has asked for location. It
+ * takes precedence over `harborId` server-side, so passing both is the honest
+ * description of "the boat is here, not at the port you have selected".
  */
 export async function situation(
   harborId: string,
   language: LanguageCode,
+  fix?: LatLon | null,
 ): Promise<SituationOutcome> {
   try {
-    const payload = await getEnvelope<SituationBrief>('/situation', { harbor: harborId, language });
+    const payload = await getEnvelope<SituationBrief>('/situation', {
+      harbor: harborId,
+      language,
+      lat: fix?.latitude,
+      lon: fix?.longitude,
+    });
     lastCallWasOffline = false;
-    return { brief: payload.data, result: payload.result as OrchestrationResult, offline: false };
+    return {
+      brief: payload.data,
+      result: payload.result as OrchestrationResult,
+      offline: false,
+      receivedAt: Date.now(),
+      anchor: (payload.anchor as SituationAnchor | undefined) ?? null,
+    };
   } catch {
+    // Offline: the bundled reference snapshot is anchored to a harbour, never to
+    // a live position. Resolving the fix here — with the same rule the server
+    // uses — keeps the two paths honest about which port the words describe.
+    const harbor = fix
+      ? findNearestHarbor(fix.latitude, fix.longitude)
+      : (HARBOR_BY_ID[harborId] ?? HARBORS[0]);
     const local = await orchestrateOffline({
       message: 'Give me the full marine situation report',
       language,
-      harborId,
+      harborId: harbor.id,
     });
     lastCallWasOffline = true;
-    return { brief: briefFromResult(local.result), result: local.result, offline: true };
+    return {
+      brief: briefFromResult(local.result),
+      result: local.result,
+      offline: true,
+      receivedAt: Date.now(),
+      anchor: {
+        harborId: harbor.id,
+        harborName: harbor.name,
+        source: fix ? ('gps' as const) : ('selection' as const),
+        distanceKm: fix ? roundTo(haversineKm(fix, harbor), 1) : null,
+        latitude: fix?.latitude ?? null,
+        longitude: fix?.longitude ?? null,
+      },
+    };
   }
 }
 

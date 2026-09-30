@@ -195,7 +195,39 @@ sweep asserts localisation integrity across all 11 on every commit. A
 localisation regression is a build failure, not a cosmetic bug. Voice input and
 speech output are included for hands-free deck-side use.
 
-## 8. Technology
+## 8. Where the boat is, and how fresh the data is
+
+Two properties a marine safety product cannot fake, because both are what a fisher
+checks before deciding whether to leave the harbour.
+
+**The data says how old it is.** The interface carries a live IST clock and an
+"Updated *N* min ago" readout that ticks every second, and re-asks the engine every
+12 minutes — the engine's own cache TTL, so a poll lands at the moment the answer
+could actually have changed. It re-fetches immediately when the tab becomes visible or
+connectivity returns, because a phone coming out of a pocket after an hour must not sit
+on an hour-old report for another twelve minutes. The age is never rounded down, and a
+clock skewed into the future reads as "just now" rather than as a negative age. An
+earlier build fetched once on load and said nothing, which made a twenty-minute-old
+report look exactly like a fresh one; for this product, silence is indistinguishable
+from safety.
+
+**GPS is a real anchor.** Location uses a continuous position watch, not a one-shot
+fix — a boat moves, and asking once is a photograph of where it was when the button was
+pressed. The fix is sent to the engine, which resolves it to the nearest port and
+**reports the anchor it actually used**; the client then reconciles its own selected
+port to that answer and shows the distance from the fix. The earlier build resolved a
+position, lit a green dot, and then built the report for whichever port was selected —
+so a user could not distinguish a working feature from a broken one. Choosing a port by
+hand cancels the watch, because an explicit choice should not be silently overridden
+thirty seconds later.
+
+Both are covered by tests: the sweep asserts a fix outranks the selected port, that the
+engine and the client agree on which port is nearest, and that an unusable fix degrades
+to the selection rather than to a default port. The offline unit tests assert the age
+readout can never be understated, that the clock is IST rather than the device's zone,
+and that the client's poll period equals the engine's cache TTL.
+
+## 9. Technology
 
 React 19 · TypeScript 5.8 · Vite 6 · Tailwind CSS 4 · Express 4 · Leaflet ·
 lucide-react · Motion · `@google/genai` (optional). Pure TypeScript core, no
@@ -212,7 +244,7 @@ reanalysis), GDACS (UN / European Commission) 7-day disaster RSS.
 **Labelled reference snapshots:** IMD-style coastal weather and warning bulletins,
 INCOIS ocean state and early-warning products. Map tiles: OpenStreetMap and Esri.
 
-## 9. What is built today, and what is not
+## 10. What is built today, and what is not
 
 Stated plainly, because an over-claim here would be the fastest way to lose
 credibility with a technical jury.
@@ -223,7 +255,8 @@ coding; 7-constituent tide prediction with departure windows; 14-boundary
 geofencing with buffer and track check; route search; chlorophyll/SST hotspot
 detection over a batched marine grid scan; ERA5-backed 36-month productivity
 trend with lagged correlation; chart and map visualisation; SSE streaming;
-offline in-browser fallback; live/offline labelling throughout.
+offline in-browser fallback; live/offline labelling throughout; continuous GPS
+position anchoring; and a visible data-age readout with automatic refresh.
 
 **Deliberately not faked.** These are the honest gaps, and each is blocked on a
 licensed or unreachable source rather than on effort:
@@ -253,7 +286,7 @@ names the cause, and the feed recovers on its own. A dedicated host IP removes i
 We consider this correct failure behaviour rather than a defect: the alternative
 would be inventing plausible numbers.
 
-## 10. Impact and scalability
+## 11. Impact and scalability
 
 Artisanal fishers are the least-served users in Indian fisheries — small boats, no
 AIS, no subscription data feed, often low literacy in English. ORCA is
@@ -266,13 +299,17 @@ The same pipeline supports the five role views already built — fisher, researc
 coastal authority, disaster management and maritime authority — each reading the
 same evidence ledger through a different lens.
 
-## 11. Validation
+## 12. Validation
 
-- **49 offline unit tests** — geodesy edges, advisory expiry and headline rules,
+- **71 offline unit tests** — geodesy edges, advisory expiry and headline rules,
   localisation integrity across all 11 languages, reference-dataset integrity,
-  live sea-state honesty, batched point sampling, and back-off scoping.
-- **3,306-check regression sweep** across the engine, all 11 languages, every REST
-  endpoint, the chat path and the SSE stream.
+  live sea-state honesty, batched point sampling, back-off scoping, and the two
+  invariants that keep the interface honest: no English can reach the screen through
+  a fallback, and the data-age readout can never overstate its own freshness.
+- **3,318-check regression sweep** across the engine, all 11 languages, every REST
+  endpoint, the chat path, the SSE stream, and GPS anchoring (a position outranks the
+  selected port, the engine and the client agree on which port is nearest, and an
+  unusable fix degrades to the selection rather than to a default).
 - **Continuous integration** on every commit, with the localisation and
   product-token checks as hard gates.
 

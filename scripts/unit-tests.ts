@@ -749,6 +749,100 @@ function approx(a: number, b: number, tolerance: number): boolean {
 }
 
 /* ------------------------------------------------------------------ *
+ * Section 11 — the freshness readout cannot lie
+ *
+ * The second prototype defect was "stale data, no real-time sync, and the real
+ * date-time is not reflected". The cure is a clock and an age readout, and a
+ * cure like that is only worth anything if it cannot overstate its own
+ * freshness. Three ways it can lie, all asserted here:
+ *
+ *   1. rounding the age down, so twenty-eight minutes reads as "just now";
+ *   2. clock skew making the age negative, rendering a future timestamp;
+ *   3. the clock silently switching to the *device's* timezone, so the header
+ *      disagrees with the IST bulletin printed directly beneath it.
+ *
+ * The last one is a real hazard on this product specifically: a fisher in
+ * Chennai reads a screen that says 08:40 and a bulletin that says 08:10, with
+ * no way to tell whether ORCA is wrong or the device is set to a flight mode's
+ * leftover timezone.
+ * ------------------------------------------------------------------ */
+
+{
+  const { istClock, secondsSince } = await import('../src/hooks/useNow');
+  const now = new Date();
+
+  // --- 1. the age is never understated -------------------------------------
+  // A payload stamped in the future — device clock set ahead, or a server whose
+  // clock leads the phone's — must read as "just now" and not as a negative age.
+  const clockSkewed = secondsSince(now.getTime() + 60_000, now);
+  check('freshness · a future timestamp clamps to zero, never negative', clockSkewed === 0, `got ${clockSkewed}`);
+
+  const thirtySeconds = secondsSince(now.getTime() - 30_000, now);
+  check(
+    'freshness · a 30-second-old reading is 30 seconds old, not 0',
+    thirtySeconds === 30,
+    `got ${thirtySeconds}`,
+  );
+
+  // --- 2. the clock is IST, whatever the device thinks --------------------
+  // 06:30 UTC is 12:00 IST, a six-and-a-half hour offset that no amount of
+  // device-locale drift can fake.
+  const utcMidMorning = new Date('2026-09-30T06:30:00Z');
+  const clocked = istClock(utcMidMorning);
+  check(
+    'freshness · the clock reports IST, not the device timezone',
+    clocked.startsWith('12:00'),
+    `2026-09-30T06:30Z should read 12:00 IST, got ${clocked}`,
+  );
+
+  check(
+    'freshness · the clock is HH:MM:SS and 24-hour',
+    /^\d{2}:\d{2}:\d{2}$/.test(clocked),
+    `got ${clocked}`,
+  );
+
+  // Independent of the formatter: the offset really is +05:30, so the age the
+  // user reads and the stamp on the bulletin share a time base.
+  const offsetMinutes = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    timeZoneName: 'longOffset',
+  })
+    .formatToParts(utcMidMorning)
+    .find((p) => p.type === 'timeZoneName')?.value;
+  check(
+    'freshness · the clock time base is UTC+05:30',
+    offsetMinutes === 'GMT+05:30',
+    `got ${offsetMinutes}`,
+  );
+
+  // --- 3. the poll period is not shorter than the engine's cache TTL -------
+  // Polling faster than the engine's own 12-minute snapshot cannot return
+  // anything new, so it only spends request budget and pushes the live sources
+  // further into their back-off. Assert the client's constant matches the
+  // engine's, so the two cannot drift apart.
+  const appSrc = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  const clientTtl = /const AUTO_REFRESH_MS = (\d+) \* 60 \* 1000;/.exec(appSrc);
+  const liveSrc = readFileSync(new URL('../src/core/live.ts', import.meta.url), 'utf8');
+  const serverTtl = /const TTL_MS = (\d+) \* 60 \* 1000;/.exec(liveSrc);
+
+  check(
+    'freshness · the client declares a poll period in whole minutes',
+    !!clientTtl,
+    'AUTO_REFRESH_MS not found in src/App.tsx',
+  );
+  check(
+    'freshness · the engine still declares a cache TTL in whole minutes',
+    !!serverTtl,
+    'TTL_MS not found in src/core/live.ts',
+  );
+  check(
+    'freshness · the poll period matches the engine cache TTL',
+    !!clientTtl && !!serverTtl && clientTtl[1] === serverTtl[1],
+    `client ${clientTtl?.[1]}min vs engine ${serverTtl?.[1]}min`,
+  );
+}
+
+/* ------------------------------------------------------------------ *
  * Summary
  * ------------------------------------------------------------------ */
 

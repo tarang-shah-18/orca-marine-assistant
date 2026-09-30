@@ -621,6 +621,15 @@ export interface UiStrings {
 
   /** Summary line for the planner registry entry, which never runs. */
   plannerRuntimeWord: string;
+
+  /* ---- Freshness strip: clock, data age, GPS anchor ---- */
+  updatedJustNowWord: string;
+  updatedSecondsAgoWord: string;
+  updatedMinutesAgoWord: string;
+  updatedHoursAgoWord: string;
+  refreshingNowWord: string;
+  autoRefreshWord: string;
+  anchorGpsWord: string;
 }
 
 export interface Phrasebook {
@@ -1038,6 +1047,13 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       chartCpueTitleWord: 'CPUE and effort standardisation',
       chartCpueSubtitleWord: 'Landings per unit of fishing effort',
       plannerRuntimeWord: 'Planning is handled by the runtime.',
+      updatedJustNowWord: 'Updated just now',
+      updatedSecondsAgoWord: 'Updated {n}s ago',
+      updatedMinutesAgoWord: 'Updated {n} min ago',
+      updatedHoursAgoWord: 'Updated {n} h ago',
+      refreshingNowWord: 'Refreshing…',
+      autoRefreshWord: 'Checks for new data every {n} min',
+      anchorGpsWord: 'Anchored to {harbor} · {km} km from your position',
 
       selectedCorridorWord: 'Selected corridor',
       viewOnMapWord: 'View on map →',
@@ -1687,6 +1703,13 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       chartCpueTitleWord: 'CPUE और प्रयास मानकीकरण',
       chartCpueSubtitleWord: 'प्रति इकाई मछली पकड़ प्रयास प्राप्त अवतरण',
       plannerRuntimeWord: 'योजना बनाने का काम रनटाइम करता है।',
+      updatedJustNowWord: 'अभी अद्यतन किया गया',
+      updatedSecondsAgoWord: '{n} सेकंड पहले अद्यतन',
+      updatedMinutesAgoWord: '{n} मिनट पहले अद्यतन',
+      updatedHoursAgoWord: '{n} घंटे पहले अद्यतन',
+      refreshingNowWord: 'अद्यतन हो रहा है…',
+      autoRefreshWord: 'हर {n} मिनट में नया डेटा देखता है',
+      anchorGpsWord: '{harbor} से जुड़ा · आपकी स्थिति से {km} किमी',
 
       selectedCorridorWord: 'चयनित गलियारा',
       viewOnMapWord: 'मानचित्र पर देखें →',
@@ -2334,6 +2357,13 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       chartCpueTitleWord: 'CPUE आणि प्रयत्न मानकीकरण',
       chartCpueSubtitleWord: 'प्रति मात्रा मासे पकडण्याच्या प्रयत्नाचे अवतरण',
       plannerRuntimeWord: 'नियोजन करण्याचे काम रनटाइम करते.',
+      updatedJustNowWord: 'आत्ताच अद्ययावत केले',
+      updatedSecondsAgoWord: '{n} सेकंद पूर्वी अद्ययावत',
+      updatedMinutesAgoWord: '{n} मिनिटांपूर्वी अद्ययावत',
+      updatedHoursAgoWord: '{n} तासांपूर्वी अद्ययावत',
+      refreshingNowWord: 'अद्ययावत होत आहे…',
+      autoRefreshWord: 'दर {n} मिनिटांनी नवीन माहिती तपासते',
+      anchorGpsWord: '{harbor}शी जोडले · तुमच्या स्थानापासून {km} किमी',
 
       selectedCorridorWord: 'निवडलेली गल्ली',
       viewOnMapWord: 'नकाशावर पहा →',
@@ -2981,6 +3011,13 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       chartCpueTitleWord: 'CPUE અને પ્રયાસનું માપદાંડીકરણ',
       chartCpueSubtitleWord: 'માછલી પકડવાના દરેક એકમ માટે અવતરણ',
       plannerRuntimeWord: 'આયોજન કરવાનું કામ રનટાઇમ કરે છે.',
+      updatedJustNowWord: 'હમણાં જ અપડેટ કર્યું',
+      updatedSecondsAgoWord: '{n} સેકંડ પહેલાં અપડેટ',
+      updatedMinutesAgoWord: '{n} મિનિટ પહેલાં અપડેટ',
+      updatedHoursAgoWord: '{n} કલાક પહેલાં અપડેટ',
+      refreshingNowWord: 'અપડેટ થઈ રહ્યું છે…',
+      autoRefreshWord: 'દર {n} મિનિટે નવો ડેટા તપાસે છે',
+      anchorGpsWord: '{harbor} સાથે જોડાયેલું · તમારા સ્થાનથી {km} કિમી',
 
       selectedCorridorWord: 'પસંદ કરેલ કોરિડોર',
       viewOnMapWord: 'નકશા પર જુઓ →',
@@ -3633,6 +3670,13 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       chartCpueTitleWord: 'CPUE ಮತ್ತು ಪ್ರಯಾಸದ ಮಾನಕೀಕರಣ',
       chartCpueSubtitleWord: 'ಒಂದು ಮೀನು ಹಿಡುವ ಪ್ರಯಾಸಕ್ಕೆ ಒಳಸೂಚಿ',
       plannerRuntimeWord: 'ಯೋಜನೆ ಮಾಡುವುದು ರನ್‌ಟೈಮ್ ಮಾಡುತ್ತದೆ.',
+      updatedJustNowWord: 'ಈಗಷ್ಟೇ ನವೀಕರಿಸಲಾಗಿದೆ',
+      updatedSecondsAgoWord: '{n} ಸೆಕೆಂಡ್ ಮೊದಲು ನವೀಕರಿಸಲಾಗಿದೆ',
+      updatedMinutesAgoWord: '{n} ನಿಮಿಷಗಳ ಮೊದಲು ನವೀಕರಿಸಲಾಗಿದೆ',
+      updatedHoursAgoWord: '{n} ಗಂಟೆಗಳ ಮೊದಲು ನವೀಕರಿಸಲಾಗಿದೆ',
+      refreshingNowWord: 'ನವೀಕರಿಸಲಾಗುತ್ತಿದೆ…',
+      autoRefreshWord: 'ಪ್ರತಿ {n} ನಿಮಿಷಕ್ಕೊಮ್ಮೆ ಹೊಸ ಡೇಟಾ ಪರಿಶೀಲಿಸುತ್ತದೆ',
+      anchorGpsWord: '{harbor} ಜೊತೆ ಜೋಡಿಸಲಾಗಿದೆ · ನಿಮ್ಮ ಸ್ಥಳದಿಂದ {km} ಕಿ.ಮೀ.',
 
       selectedCorridorWord: 'ಆಯ್ಕೆ ಮಾಡಿದ ಕಾರಿಡಾರ್',
       viewOnMapWord: 'ನಕ್ಷೆಯಲ್ಲಿ ನೋಡಿ →',
@@ -4287,6 +4331,13 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       chartCpueTitleWord: 'CPUE-യും പരിശ്രമ നിയമീകരണവും',
       chartCpueSubtitleWord: 'ഒരുപരിശ്രമത്തിന് കിട്ടുന്ന ഒരുപുറത്തിലെത്തുന്ന മത്സ്യങ്ങൾ',
       plannerRuntimeWord: 'ആസൂത്രണം ചെയ്യുന്നത് റണ്‍ടൈമാണ്.',
+      updatedJustNowWord: 'ഇപ്പോൾ അപ്ഡേറ്റ് ചെയ്തു',
+      updatedSecondsAgoWord: '{n} സെക്കന്ട് മുമ്പ് അപ്ഡേറ്റ് ചെയ്തത്',
+      updatedMinutesAgoWord: '{n} മിനിറ്റ് മുമ്പ് അപ്ഡേറ്റ് ചെയ്തത്',
+      updatedHoursAgoWord: '{n} മണിക്കൂർ മുമ്പ് അപ്ഡേറ്റ് ചെയ്തത്',
+      refreshingNowWord: 'അപ്ഡേറ്റ് ചെയ്യുന്നു…',
+      autoRefreshWord: 'ഓരോ {n} മിനിറ്റിലും പുതിയ ഡാറ്റ പരിശോധിക്കുന്നു',
+      anchorGpsWord: '{harbor} എന്നതിലേക്ക് ബന്ധിപ്പിച്ചിരിക്കുന്നു · നിങ്ങളുടെ സ്ഥാനത്തിൽ നിന്ന് {km} കി.മീ.',
 
       selectedCorridorWord: 'തിരഞ്ഞെടുത്ത കോറിഡോർ',
       viewOnMapWord: 'ഭൂപടത്തിൽ കാണുക →',
@@ -4941,6 +4992,13 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       chartCpueTitleWord: 'CPUE మరియు ప్రయత్న ప్రామాణీకరణ',
       chartCpueSubtitleWord: 'మత్స్య దుష్టకరణ ప్రయత్నానికి రాబ',
       plannerRuntimeWord: 'ప్రణాళిక రూపొందించడం రన్‌టైమ్ చేస్తుంది.',
+      updatedJustNowWord: 'ఇప్పుడే అప్‌డేట్ చేయబడింది',
+      updatedSecondsAgoWord: '{n} సెకన్ల క్రితం అప్‌డేట్ చేయబడింది',
+      updatedMinutesAgoWord: '{n} నిమిషాల క్రితం అప్‌డేట్ చేయబడింది',
+      updatedHoursAgoWord: '{n} గంటల క్రితం అప్‌డేట్ చేయబడింది',
+      refreshingNowWord: 'అప్‌డేట్ అవుతోంది…',
+      autoRefreshWord: 'ప్రతి {n} నిమిషాలకు కొత్త డేటాను తనిఖీ చేస్తుంది',
+      anchorGpsWord: '{harbor} కు అనుసంధానించబడింది · మీ స్థానం నుండి {km} కి.మీ.',
 
       selectedCorridorWord: 'ఎంచుకున్న కారిడార్',
       viewOnMapWord: 'పటంలో చూడండి →',
@@ -5595,6 +5653,13 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       chartCpueTitleWord: 'CPUE மற்றும் முயற்சி நியம்பாக்கம்',
       chartCpueSubtitleWord: 'மீன் பிடிப்பு முயற்சிக்கு இறங்கிய மீன்',
       plannerRuntimeWord: 'திட்டமிடுவது இயக்கப்பை செய்கிறது.',
+      updatedJustNowWord: 'இப்போது புதுப்பிக்கப்பட்டது',
+      updatedSecondsAgoWord: '{n} வினாடிகளுக்கு முன் புதுப்பிக்கப்பட்டது',
+      updatedMinutesAgoWord: '{n} நிமிடங்களுக்கு முன் புதுப்பிக்கப்பட்டது',
+      updatedHoursAgoWord: '{n} மணி நேரத்திற்கு முன் புதுப்பிக்கப்பட்டது',
+      refreshingNowWord: 'புதுப்பிக்கப்படுகிறது…',
+      autoRefreshWord: 'ஒவ்வொரு {n} நிமிடங்களுக்கும் புதிய தரவைச் சரிபார்க்கும்',
+      anchorGpsWord: '{harbor} உடன் இணைக்கப்பட்டது · உங்கள் இருப்பிடத்திலிருந்து {km} கி.மீ.',
 
       selectedCorridorWord: 'தேர்ந்தெடுத்த நடைபாதை',
       viewOnMapWord: 'வரைபடத்தில் காண்க →',
@@ -6250,6 +6315,13 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       chartCpueTitleWord: 'CPUE ও প্রচেষ্টার আদর্শীকরণ',
       chartCpueSubtitleWord: 'একক মাছ ধরার প্রচেষ্টায় উত্তোলন',
       plannerRuntimeWord: 'পরিকল্পনা করার কাজটি রানটাইম করে।',
+      updatedJustNowWord: 'এইমাত্র হালনাগাদ হয়েছে',
+      updatedSecondsAgoWord: '{n} সেকেন্ড আগে হালনাগাদ হয়েছে',
+      updatedMinutesAgoWord: '{n} মিনিট আগে হালনাগাদ হয়েছে',
+      updatedHoursAgoWord: '{n} ঘণ্টা আগে হালনাগাদ হয়েছে',
+      refreshingNowWord: 'হালনাগাদ হচ্ছে…',
+      autoRefreshWord: 'প্রতি {n} মিনিটে নতুন তথ্য পরীক্ষা করে',
+      anchorGpsWord: '{harbor} এর সঙ্গে সংযুক্ত · আপনার অবস্থান থেকে {km} কিমি',
 
       selectedCorridorWord: 'নির্বাচিত করিডোর',
       viewOnMapWord: 'মানচিত্রে দেখুন →',
@@ -6904,6 +6976,13 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       chartCpueTitleWord: 'CPUE ଏବଂ ପ୍ରଚେଷ୍ଟାର ମାନକୀକରଣ',
       chartCpueSubtitleWord: 'ଏକ ମାଛ ଧରିବା ପ୍ରଚେଷ୍ଟାକୁ ଉତ୍ତରଣ',
       plannerRuntimeWord: 'ଯୋଜନା କରିବା କାମ ରଣ୍ଟାଇମ୍ କରେ।',
+      updatedJustNowWord: 'ବର୍ତ୍ତମାନ ଅଦ୍ୟତନ ହେଲା',
+      updatedSecondsAgoWord: '{n} ସେକେଣ୍ଡ ପୂର୍ବେ ଅଦ୍ୟତନ ହେଲା',
+      updatedMinutesAgoWord: '{n} ମିନିଟ ପୂର୍ବେ ଅଦ୍ୟତନ ହେଲା',
+      updatedHoursAgoWord: '{n} ଘଣ୍ଟା ପୂର୍ବେ ଅଦ୍ୟତନ ହେଲା',
+      refreshingNowWord: 'ଅଦ୍ୟତନ ହେଉଛି…',
+      autoRefreshWord: 'ପ୍ରତ୍ୟେକ {n} ମିନିଟରେ ନୂଆ ତଥ୍ୟ ଯାଞ୍ଚ କରେ',
+      anchorGpsWord: '{harbor} ସହ ଜୋଡ଼ାଯାଇଛି · ଆପଣଙ୍କ ସ୍ଥାନରୁ {km} କି.ମି.',
 
       selectedCorridorWord: 'ନିର୍ବାଚିତ କରିଡର',
       viewOnMapWord: 'ମାନଚିତ୍ରରେ ଦେଖନ୍ତୁ →',
@@ -7559,6 +7638,13 @@ const PHRASEBOOKS: Record<LanguageCode, Phrasebook> = {
       chartCpueTitleWord: 'CPUE ਅਤੇ ਯਤਨ ਦਾ ਮਿਆਰੀਕਰਨ',
       chartCpueSubtitleWord: 'ਇੱਕ ਮੱਛੀ ਪਕੜਨ ਦੀ ਯਤਨ ਲਈ ਉਤਰਣ',
       plannerRuntimeWord: 'ਯੋਜਨਾਬੰਦੀ ਦਾ ਕੰਮ ਰਨਟਾਈਮ ਕਰਦਾ ਹੈ।',
+      updatedJustNowWord: 'ਹੁਣੇ ਅੱਪਡੇਟ ਕੀਤਾ ਗਿਆ',
+      updatedSecondsAgoWord: '{n} ਸਕਿੰਟ ਪਹਿਲਾਂ ਅੱਪਡੇਟ ਕੀਤਾ ਗਿਆ',
+      updatedMinutesAgoWord: '{n} ਮਿੰਟ ਪਹਿਲਾਂ ਅੱਪਡੇਟ ਕੀਤਾ ਗਿਆ',
+      updatedHoursAgoWord: '{n} ਘੰਟੇ ਪਹਿਲਾਂ ਅੱਪਡੇਟ ਕੀਤਾ ਗਿਆ',
+      refreshingNowWord: 'ਅੱਪਡੇਟ ਹੋ ਰਿਹਾ ਹੈ…',
+      autoRefreshWord: 'ਹਰ {n} ਮਿੰਟ ਵਿੱਚ ਨਵਾਂ ਡਾਟਾ ਜਾਂਚਦਾ ਹੈ',
+      anchorGpsWord: '{harbor} ਨਾਲ ਜੁੜਿਆ · ਤੁਹਾਡੀ ਥਾਂ ਤੋਂ {km} ਕਿਮੀ',
 
       selectedCorridorWord: 'ਚੁਣਿਆ ਕੋਰੀਡੋਰ',
       viewOnMapWord: 'ਨਕਸ਼ੇ ਤੇ ਦੇਖੋ →',

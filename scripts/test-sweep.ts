@@ -20,7 +20,7 @@
 
 import { orchestrate, buildSituationReport, freshMemory } from '../src/agents/orchestrator';
 import { ALL_INTENTS } from '../src/core/intent';
-import { HARBORS, VESSEL_PROFILES } from '../src/core/dataset';
+import { HARBORS, VESSEL_PROFILES, findNearestHarbor } from '../src/core/dataset';
 import { PERSONAS } from '../src/personas';
 import { allScenarioQuestions } from '../src/server/scenarios';
 import type { LanguageCode, OrchestrationResult, VisualizationData } from '../src/types';
@@ -477,6 +477,116 @@ async function sectionServerEndpoints(): Promise<void> {
     expect(Array.isArray(body?.result?.visualizations), 'server', 'situation goa has visualizations', 'missing');
   } catch (error) {
     record('server', 'situation goa anchors to Goa', false, error instanceof Error ? error.message : String(error));
+  }
+
+  /*
+   * GPS anchoring over HTTP.
+   *
+   * This is the first prototype defect. `acquireGps` was a one-shot
+   * `getCurrentPosition` whose result was displayed in the header badge and
+   * never sent anywhere: the report was still built for whichever port happened
+   * to be selected, so turning location on visibly did nothing except light a
+   * green dot. Worse, the client *assumed* its own request had won, so there was
+   * no way to tell a stale render from a broken feature.
+   *
+   * The engine now resolves a fix to the nearest port and reports the anchor it
+   * actually used. These checks pin all four behaviours that made that
+   * trustworthy: a fix is honoured, it outranks the selected port, a fix the
+   * server cannot parse degrades to the selection instead of to a default port,
+   * and the server agrees with the client about which port is nearest.
+   */
+  {
+    // Two fixes at sea, each deliberately far enough from its nearest port that
+    // a sign error in latitude or longitude would be visible in the distance.
+    const FIXES: Array<{ name: string; lat: number; lon: number; wrongHarbor: string }> = [
+      { name: 'digha coastal', lat: 21.43, lon: 87.08, wrongHarbor: 'kochi' },
+      { name: 'chennai offshore', lat: 13.1, lon: 80.9, wrongHarbor: 'digha' },
+    ];
+
+    for (const fix of FIXES) {
+      const label = `gps ${fix.name} anchors to nearest port`;
+
+      // Resolved locally with the same function the server uses, so this asserts
+      // agreement rather than restating a hardcoded expectation.
+      const nearest = findNearestHarbor(fix.lat, fix.lon);
+
+      try {
+        const { body } = await httpJson(
+          `/situation?lat=${fix.lat}&lon=${fix.lon}&harbor=${fix.wrongHarbor}&language=en-IN`,
+        );
+        const anchor = body?.anchor;
+
+        expect(
+          anchor?.source === 'gps',
+          'gps',
+          `${label} (reported as GPS)`,
+          `source=${anchor?.source}`,
+        );
+        expect(
+          anchor?.harborId === nearest.id,
+          'gps',
+          `${label} (client and engine agree)`,
+          `engine=${anchor?.harborId} client=${nearest.id}`,
+        );
+        expect(
+          typeof anchor?.distanceKm === 'number' &&
+            Number.isFinite(anchor.distanceKm) &&
+            anchor.distanceKm > 0,
+          'gps',
+          `${label} (distance is a real measurement)`,
+          `distanceKm=${anchor?.distanceKm}`,
+        );
+        // The engine echoing the fix back is what lets the client tell the
+        // difference between "my fix was ignored" and "my fix moved the anchor".
+        expect(
+          anchor?.latitude === fix.lat && anchor?.longitude === fix.lon,
+          'gps',
+          `${label} (engine echoes the fix)`,
+          `got ${anchor?.latitude},${anchor?.longitude}`,
+        );
+        // And the report itself has to be about that port, not about the port
+        // that was asked for.
+        expect(
+          String(body?.result?.answer ?? '')
+            .toLowerCase()
+            .includes(nearest.shortName.toLowerCase()),
+          'gps',
+          `${label} (answer describes that port)`,
+          `answer does not mention ${nearest.shortName}`,
+        );
+      } catch (error) {
+        record('gps', label, false, error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    // A fix the server cannot parse must fall back to the requested port. The
+    // dangerous behaviour would be to fall back to HARBORS[0] and silently
+    // change which port the user is being briefed about.
+    try {
+      const { body } = await httpJson('/situation?lat=not-a-number&lon=also-not&harbor=kochi&language=en-IN');
+      expect(
+        body?.anchor?.source === 'selection' && body?.anchor?.harborId === 'kochi',
+        'gps',
+        'gps unparseable fix falls back to the selected port',
+        `anchor=${JSON.stringify(body?.anchor)}`,
+      );
+    } catch (error) {
+      record('gps', 'gps unparseable fix falls back to the selected port', false, error instanceof Error ? error.message : String(error));
+    }
+
+    // No fix at all must report a selection anchor and no measured distance,
+    // rather than a null masquerading as a measurement.
+    try {
+      const { body } = await httpJson('/situation?harbor=digha&language=en-IN');
+      expect(
+        body?.anchor?.source === 'selection' && body?.anchor?.distanceKm === null,
+        'gps',
+        'gps absent fix reports the selection with no distance',
+        `anchor=${JSON.stringify(body?.anchor)}`,
+      );
+    } catch (error) {
+      record('gps', 'gps absent fix reports the selection with no distance', false, error instanceof Error ? error.message : String(error));
+    }
   }
 
   // Fleet Watch — coast-wide posture endpoint.

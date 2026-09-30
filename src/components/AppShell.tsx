@@ -25,8 +25,9 @@ import { PERSONAS, PersonaId } from '../personas';
 import type { HarborLocation, LanguageOption } from '../types';
 import type { EngineStatus } from '../services/orcaApi';
 import { HARBORS } from '../core/dataset';
-import { UiStrings, getPhrasebook } from '../core/i18n';
+import { UiStrings, getPhrasebook, fillTemplate } from '../core/i18n';
 import { localizeProductSource } from '../core/localize';
+import { FreshnessStrip } from './FreshnessStrip';
 
 export type ViewId = 'dashboard' | 'map' | 'chat' | 'info' | 'fleet';
 
@@ -47,6 +48,14 @@ interface AppShellProps {
   gpsFix: { latitude: number; longitude: number } | null;
   gpsState: 'idle' | 'locating' | 'ok' | 'denied';
   onToggleGps: () => void;
+  /**
+   * When the displayed situation report reached the client, or null before the
+   * first response lands. Drives the freshness strip; without it the screen can
+   * look live while serving an arbitrarily old snapshot.
+   */
+  briefReceivedAt: number | null;
+  /** Which harbour the engine actually anchored the report to, and why. */
+  briefAnchor: { harborName: string; distanceKm: number | null } | null;
   children: React.ReactNode;
 }
 
@@ -102,6 +111,8 @@ export const AppShell: React.FC<AppShellProps> = ({
   gpsFix,
   gpsState,
   onToggleGps,
+  briefReceivedAt,
+  briefAnchor,
   children,
 }) => {
   const offline = status?.offline ?? false;
@@ -146,6 +157,33 @@ export const AppShell: React.FC<AppShellProps> = ({
               {offline ? ui.offlineEngine : ui.live}
               <span className="text-slate-500 font-medium">· {version}</span>
             </span>
+
+            {/* Age of the data and the IST clock. Hidden below `lg` because the
+                top bar is already tight on a phone — the freshness readout moves
+                into the footer there, where there is room for it. */}
+            <div className="hidden lg:block">
+              <FreshnessStrip book={book} receivedAt={briefReceivedAt} loading={briefLoading} />
+            </div>
+
+            {/* When a GPS fix resolved to a different port than the one selected,
+                say so. The prototype moved the badge to "on" and left the
+                dashboard describing the old harbour, which is indistinguishable
+                from the feature being broken. */}
+            {gpsState === 'ok' && briefAnchor?.distanceKm !== null && briefAnchor && (
+              <span
+                className="hidden xl:inline text-[10px] text-emerald-300/90 max-w-[16rem] truncate"
+                title={fillTemplate(ui.anchorGpsWord, {
+                  harbor: briefAnchor.harborName,
+                  km: briefAnchor.distanceKm,
+                })}
+              >
+                {fillTemplate(ui.anchorGpsWord, {
+                  harbor: briefAnchor.harborName,
+                  km: briefAnchor.distanceKm,
+                })}
+              </span>
+            )}
+
             <button
               onClick={onRefreshBrief}
               disabled={briefLoading}
@@ -309,6 +347,11 @@ export const AppShell: React.FC<AppShellProps> = ({
       {/* Footer */}
       <footer className="border-t border-slate-800/60 px-4 lg:px-6 py-2.5 text-[9px] text-slate-600 flex flex-wrap items-center gap-x-4 gap-y-1">
         <span>ORCA Marine Intelligence · SIH 2026 Problem 26176 · ISRO / Dept. of Space</span>
+        {/* On a phone the top bar has no room for the age of the data, so it is
+            repeated here rather than dropped: the readout is not decoration. */}
+        <span className="lg:hidden inline-flex">
+          <FreshnessStrip book={book} receivedAt={briefReceivedAt} loading={briefLoading} />
+        </span>
         <span className="hidden sm:inline">{ui.footerDisclaimer}</span>
       </footer>
     </div>

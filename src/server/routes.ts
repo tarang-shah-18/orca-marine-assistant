@@ -943,8 +943,21 @@ api.post('/chat/stream', asyncRoute(async (req: Request, res: Response) => {
  * ------------------------------------------------------------------ */
 
 api.get('/situation', asyncRoute(async (req: Request, res: Response) => {
-  const harborId = asHarborId(req.query.harbor ?? req.query.harborId) ?? HARBORS[0].id;
   const language = asLanguage(req.query.language);
+
+  // A GPS fix is the better anchor, so it wins over the harbour id — but only
+  // when it actually resolves to a harbour. Resolving here rather than in the
+  // client means the offline fallback and the live path agree on which port the
+  // report is about, and it keeps the resolution rule in one place: the same
+  // `findNearestHarbor` the chat turn uses.
+  const latitude = asNumber(req.query.lat ?? req.query.latitude);
+  const longitude = asNumber(req.query.lon ?? req.query.longitude);
+  const fromGps =
+    latitude !== undefined && longitude !== undefined ? findNearestHarbor(latitude, longitude) : null;
+
+  const requestedId = asHarborId(req.query.harbor ?? req.query.harborId);
+  const harbor = fromGps ?? (requestedId ? HARBORS.find((h) => h.id === requestedId) : undefined);
+  const harborId = harbor?.id ?? HARBORS[0].id;
 
   try {
     const result = await buildSituationReport(harborId, language);
@@ -954,6 +967,27 @@ api.get('/situation', asyncRoute(async (req: Request, res: Response) => {
       // detail sheet, so the banner can render without parsing the whole thing.
       data: summariseForBanner(result),
       result,
+      // Which port this report is actually about, and why. Without it the client
+      // has to assume its own request won, which is exactly the assumption that
+      // made a GPS fix look like it had been ignored: the server had silently
+      // resolved the fix to a different harbour than the one on screen.
+      anchor: {
+        harborId,
+        harborName: HARBORS.find((h) => h.id === harborId)?.name ?? harborId,
+        source: fromGps ? ('gps' as const) : ('selection' as const),
+        distanceKm:
+          fromGps && latitude !== undefined && longitude !== undefined
+            ? roundTo(
+                haversineKm(
+                  { latitude, longitude },
+                  HARBORS.find((h) => h.id === harborId) ?? HARBORS[0],
+                ),
+                1,
+              )
+            : null,
+        latitude: latitude ?? null,
+        longitude: longitude ?? null,
+      },
       timestamp: new Date().toISOString(),
     });
   } catch (error) {

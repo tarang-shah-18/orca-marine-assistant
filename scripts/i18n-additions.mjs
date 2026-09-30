@@ -289,6 +289,7 @@ import { CHANGE_ADDITIONS } from './change-additions.mjs';
 import { RECOMMEND_ADDITIONS } from './recommend-additions.mjs';
 import { CHROME_TRANSLATIONS } from './chrome-additions.mjs';
 import { CHART_ADDITIONS } from './chart-additions.mjs';
+import { FRESH_ADDITIONS } from './fresh-additions.mjs';
 
 for (const [lang, pack] of Object.entries(ROUTE_ADDITIONS)) {
   Object.assign(TRANSLATIONS[lang], pack);
@@ -315,6 +316,10 @@ for (const [lang, pack] of Object.entries(CHROME_TRANSLATIONS)) {
 }
 
 for (const [lang, pack] of Object.entries(CHART_ADDITIONS)) {
+  Object.assign(TRANSLATIONS[lang], pack);
+}
+
+for (const [lang, pack] of Object.entries(FRESH_ADDITIONS)) {
   Object.assign(TRANSLATIONS[lang], pack);
 }
 
