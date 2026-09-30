@@ -307,6 +307,31 @@ option:
    engine directly — the SSE stream flows client → engine without passing through
    Vercel, so heartbeats and streaming are unaffected.
 
+#### If a product drops to reference in production
+
+A product never fails quietly. When a live feed is missing, its `source` switches to the
+labelled reference snapshot, `/api/ready` reports `live: false` for it, and
+`/api/status` names the reason under `upstreamFailures` (for example
+`UpstreamRateLimit: HTTP 429`). Nothing is ever presented as live when it is not.
+
+The common cause on a free host is upstream throttling, not ORCA. Open-Meteo's free
+tier is counted **per source IP**, and Render's free instances share an egress IP pool
+with other tenants, so that pool can be throttled by traffic ORCA never sent. The
+engine therefore:
+
+- samples all ~30 fishing-ground and hotspot points through **one** batched call, so a
+  cold refresh costs 6 upstream requests rather than 34;
+- **backs off** a `429` instead of retrying (each retry deepens the throttle), honouring
+  the upstream's `Retry-After` when present, and **recovers on its own** when the
+  window lapses;
+- reports the throttle rather than hiding it.
+
+Running on a host with a dedicated IP (a VM, or a paid Render instance) removes the
+shared-pool throttle entirely. ORCA deliberately does *not* blend in a partial second
+source when one is throttled — a second keyless feed that carries only wind and air
+temperature would leave gusts, visibility, rain probability and lightning to be
+invented, and a complete labelled reference snapshot is the honest answer.
+
 ### The AI layer is genuinely optional
 
 The engine is deterministic and complete without an LLM. When a key is present, Gemini
